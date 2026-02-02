@@ -39,7 +39,6 @@ interface UserContext {
     content: string;
     category: string | null;
   }>;
-  // Manager/HR specific context
   teamLeaveRequests?: Array<{
     id: string;
     user_id: string;
@@ -48,6 +47,7 @@ interface UserContext {
     end_date: string;
     status: string;
     reason: string | null;
+    employee_name?: string;
   }>;
   allEmployees?: Array<{
     id: string;
@@ -70,186 +70,142 @@ interface RequestBody {
   context: UserContext;
 }
 
+const CONCISE_STYLE = `
+RESPONSE STYLE:
+- Be ULTRA-CONCISE. Max 1-2 sentences per response.
+- Lead with action, not explanation.
+- Use bullet points for lists.
+- No filler words. No pleasantries unless asked.
+
+Example good responses:
+- "3 pending requests. John (sick, Feb 5-6), Sarah (annual, Feb 10-14). Want me to approve any?"
+- "Approved. Leave request processed."
+- "⚠️ Conflict: 2 team members already off Feb 10-12. Recommend caution."
+`;
+
+const DECISION_SUPPORT_PROMPT = `
+DECISION SUPPORT (for leave requests):
+When discussing a pending leave request, ALWAYS provide a quick recommendation:
+1. Check if dates conflict with other approved leaves
+2. Consider team coverage
+3. Give a clear verdict: "✅ Recommend approving" or "⚠️ Caution: [reason]"
+
+Example:
+User: "Should I approve John's leave?"
+You: "✅ Recommend approving. No conflicts found for Feb 10-14. Team coverage is adequate."
+`;
+
+const ACTION_COMMANDS_PROMPT = `
+ACTION EXECUTION:
+You can execute these actions when the user confirms:
+- approve_leave(request_id) - Approve a pending leave
+- reject_leave(request_id) - Reject a pending leave  
+- create_announcement(title, content, priority) - Post announcement
+
+When user says "approve", "reject", or similar:
+1. Confirm which request
+2. Execute and respond: "Done. [Action] completed."
+
+The UI will handle the actual database update when you confirm the action.
+`;
+
 const STRICT_BOUNDARY_PROMPT = `
-CRITICAL RESTRICTIONS - YOU MUST FOLLOW THESE RULES:
-1. You are NEXUS, an AI HR Assistant for this company ONLY.
-2. You can ONLY answer questions related to:
-   - Company policies provided in the context
-   - The user's own tasks, leave requests, and work details
-   - For Managers/HR: team management, leave approvals, employee data provided
-3. You MUST REFUSE to answer:
-   - General knowledge questions unrelated to work
-   - Questions about other companies
-   - Personal advice unrelated to work
-   - Any topic not covered by company data
-4. If asked something outside your scope, respond: "I can only help with company-related matters. Please ask about your tasks, leave policies, company rules, or work-related topics."
-5. Always reference SPECIFIC data from the context when answering.
-6. Be professional, helpful, and treat each user based on their role and personal data.
+CRITICAL RESTRICTIONS:
+1. You are NEXUS, a CONCISE AI HR assistant.
+2. ONLY answer company-related questions.
+3. Reference SPECIFIC data from context.
+4. If outside scope: "I only handle company matters."
+
+${CONCISE_STYLE}
 `;
 
 function buildEmployeeSystemPrompt(context: UserContext): string {
   let prompt = `${STRICT_BOUNDARY_PROMPT}
 
-You are NEXUS, the personal HR Assistant for ${context.profile?.full_name || "this employee"}.
-Department: ${context.profile?.department || "Not specified"}
+NEXUS for ${context.profile?.full_name || "Employee"} | ${context.profile?.department || "Dept N/A"}
 
-YOUR ROLE: Act as a friendly, knowledgeable HR representative who knows this specific employee's work situation intimately.
-
-=== THIS EMPLOYEE'S CURRENT WORK STATUS ===
+YOUR TASKS:
 `;
 
-  // Add tasks context
   if (context.tasks && context.tasks.length > 0) {
-    const pendingTasks = context.tasks.filter(t => t.status === "pending");
-    const inProgressTasks = context.tasks.filter(t => t.status === "in_progress");
-    const completedTasks = context.tasks.filter(t => t.status === "completed");
-    
-    prompt += `
-TASKS OVERVIEW:
-- Total assigned tasks: ${context.tasks.length}
-- Pending: ${pendingTasks.length}
-- In Progress: ${inProgressTasks.length}
-- Completed: ${completedTasks.length}
-
-DETAILED TASK LIST:
-${context.tasks.map(t => `• [${t.status?.toUpperCase()}] ${t.title} (Priority: ${t.priority}${t.due_date ? `, Due: ${t.due_date}` : ""})${t.description ? ` - ${t.description}` : ""}`).join("\n")}
-`;
+    const pending = context.tasks.filter(t => t.status === "pending").length;
+    const inProgress = context.tasks.filter(t => t.status === "in_progress").length;
+    prompt += `${context.tasks.length} total (${pending} pending, ${inProgress} in-progress)\n`;
+    prompt += context.tasks.slice(0, 10).map(t => `• [${t.status}] ${t.title} (${t.priority})`).join("\n");
   } else {
-    prompt += "\nTASKS: No tasks currently assigned to this employee.\n";
+    prompt += "No tasks assigned.\n";
   }
 
-  // Add leave requests context
   if (context.leaveRequests && context.leaveRequests.length > 0) {
-    prompt += `
-LEAVE REQUEST HISTORY:
-${context.leaveRequests.map(l => `• ${l.leave_type.toUpperCase()} (${l.start_date} to ${l.end_date}) - Status: ${l.status}${l.reason ? ` | Reason: ${l.reason}` : ""}`).join("\n")}
-`;
-  } else {
-    prompt += "\nLEAVE REQUESTS: No leave requests on file.\n";
+    prompt += `\n\nYOUR LEAVE HISTORY:\n`;
+    prompt += context.leaveRequests.map(l => `• ${l.leave_type} (${l.start_date} to ${l.end_date}) - ${l.status}`).join("\n");
   }
 
-  // Add policies context
   if (context.policies && context.policies.length > 0) {
-    prompt += `
-=== COMPANY POLICIES (Your Knowledge Base) ===
-${context.policies.map(p => `
-### ${p.title} (${p.category || "General"})
-${p.content}
-`).join("\n---\n")}
-`;
+    prompt += `\n\nPOLICIES:\n`;
+    prompt += context.policies.map(p => `### ${p.title}\n${p.content.substring(0, 300)}...`).join("\n\n");
   }
-
-  prompt += `
-=== HOW TO RESPOND ===
-- When asked about tasks: Reference the SPECIFIC tasks listed above
-- When asked about leave: Check their leave history and explain relevant policies
-- When asked policy questions: Quote from the company policies above
-- Always personalize responses using their name and department
-- If they ask something not covered by this data, politely redirect to HR or say you don't have that information
-`;
 
   return prompt;
 }
 
 function buildManagerSystemPrompt(context: UserContext): string {
   let prompt = `${STRICT_BOUNDARY_PROMPT}
+${DECISION_SUPPORT_PROMPT}
+${ACTION_COMMANDS_PROMPT}
 
-You are NEXUS, the Management Assistant for ${context.profile?.full_name || "this manager"}.
-Department: ${context.profile?.department || "Not specified"}
+NEXUS for Manager ${context.profile?.full_name || ""} | ${context.profile?.department || ""}
 
-YOUR ROLE: Assist managers with team oversight, leave approvals, task management, and identifying potential issues like burnout.
-
-=== IMPORTANT: ACTION COMMANDS ===
-You have the AUTHORITY to process leave requests when the manager gives you permission.
-When a manager says things like:
-- "Approve leave request for [name]" 
-- "Reject the leave request"
-- "Approve all pending leaves"
-- "Yes, approve it"
-
-Respond with a confirmation and let them know the action has been noted. The UI will handle the actual approval/rejection.
-
-=== YOUR PERSONAL WORK STATUS ===
 `;
 
-  // Manager's own tasks
-  if (context.tasks && context.tasks.length > 0) {
-    prompt += `
-YOUR TASKS:
-${context.tasks.map(t => `• [${t.status?.toUpperCase()}] ${t.title} (Priority: ${t.priority})`).join("\n")}
-`;
-  }
-
-  // Team leave requests pending approval
+  // Pending leave requests - this is the priority
   if (context.teamLeaveRequests && context.teamLeaveRequests.length > 0) {
-    const pendingLeaves = context.teamLeaveRequests.filter(l => l.status === "pending");
-    prompt += `
-=== TEAM LEAVE REQUESTS REQUIRING YOUR ACTION ===
-⚠️ Pending Approvals: ${pendingLeaves.length}
-${context.teamLeaveRequests.map(l => `• Request ID: ${l.id.substring(0, 8)} | Employee: ${(l as any).employee_name || l.user_id.substring(0, 8)} | ${l.leave_type} (${l.start_date} to ${l.end_date}) - STATUS: ${l.status.toUpperCase()}${l.reason ? ` | Reason: ${l.reason}` : ""}`).join("\n")}
-
-💡 TIP: You can approve or reject these requests by telling me, e.g., "Approve the leave for [employee name]" or use the notification panel.
-`;
-  }
-
-  // Team tasks overview
-  if (context.teamTasks && context.teamTasks.length > 0) {
-    const tasksByStatus = {
-      pending: context.teamTasks.filter(t => t.status === "pending").length,
-      in_progress: context.teamTasks.filter(t => t.status === "in_progress").length,
-      completed: context.teamTasks.filter(t => t.status === "completed").length,
-    };
+    const pending = context.teamLeaveRequests.filter(l => l.status === "pending");
     
-    prompt += `
-=== TEAM TASKS OVERVIEW ===
-Total: ${context.teamTasks.length} | Pending: ${tasksByStatus.pending} | In Progress: ${tasksByStatus.in_progress} | Completed: ${tasksByStatus.completed}
+    prompt += `⚠️ PENDING LEAVE APPROVALS: ${pending.length}\n`;
+    prompt += pending.map(l => {
+      const name = l.employee_name || `User ${l.user_id.substring(0, 6)}`;
+      return `• ID:${l.id.substring(0, 8)} | ${name} | ${l.leave_type} | ${l.start_date} to ${l.end_date}${l.reason ? ` | "${l.reason}"` : ""}`;
+    }).join("\n");
 
-Task Details:
-${context.teamTasks.slice(0, 20).map(t => `• [${t.status?.toUpperCase()}] ${t.title} (Priority: ${t.priority})`).join("\n")}
-`;
+    // Check for conflicts between pending and approved
+    const approved = context.teamLeaveRequests.filter(l => l.status === "approved");
+    if (approved.length > 0) {
+      prompt += `\n\nAPPROVED LEAVES (for conflict check):\n`;
+      prompt += approved.slice(0, 5).map(l => `• ${l.employee_name || l.user_id.substring(0, 6)}: ${l.start_date} to ${l.end_date}`).join("\n");
+    }
   }
 
-  // Policies
+  // Team task summary
+  if (context.teamTasks && context.teamTasks.length > 0) {
+    const stats = {
+      total: context.teamTasks.length,
+      pending: context.teamTasks.filter(t => t.status === "pending").length,
+      inProgress: context.teamTasks.filter(t => t.status === "in_progress").length,
+      high: context.teamTasks.filter(t => t.priority === "high").length,
+    };
+    prompt += `\n\nTEAM TASKS: ${stats.total} total, ${stats.pending} pending, ${stats.inProgress} in-progress, ${stats.high} high-priority`;
+  }
+
+  // Policies reference
   if (context.policies && context.policies.length > 0) {
-    prompt += `
-=== COMPANY POLICIES REFERENCE ===
-${context.policies.map(p => `### ${p.title}\n${p.content.substring(0, 500)}...`).join("\n\n")}
-`;
+    prompt += `\n\nPOLICY REFERENCE:\n`;
+    prompt += context.policies.slice(0, 5).map(p => `• ${p.title}`).join("\n");
   }
-
-  prompt += `
-=== HOW TO HELP MANAGERS ===
-- Summarize pending leave requests and recommend actions
-- When asked to approve/reject leaves, confirm the action
-- Identify employees with high workloads (many pending/in-progress tasks)
-- Answer policy questions to help make decisions
-- Flag potential burnout risks (employees with many overdue tasks)
-- Provide team productivity insights based on task data
-`;
 
   return prompt;
 }
 
 function buildHRSystemPrompt(context: UserContext): string {
   let prompt = `${STRICT_BOUNDARY_PROMPT}
+${DECISION_SUPPORT_PROMPT}
+${ACTION_COMMANDS_PROMPT}
 
-You are NEXUS, the HR Analytics & Policy Assistant for ${context.profile?.full_name || "HR Admin"}.
+NEXUS for HR Admin ${context.profile?.full_name || ""}
 
-YOUR ROLE: Provide comprehensive HR support including policy management, employee data analysis, leave oversight, and organizational insights.
-
-=== IMPORTANT: ACTION COMMANDS ===
-You have the AUTHORITY to process leave requests when HR gives you permission.
-When HR says things like:
-- "Approve leave request for [name]" 
-- "Reject the leave request"
-- "Approve all pending leaves"
-
-Respond with a confirmation and let them know the action has been noted. The UI will handle the actual approval/rejection.
-
-=== ORGANIZATION OVERVIEW ===
 `;
 
-  // All employees overview
+  // Employee overview
   if (context.allEmployees && context.allEmployees.length > 0) {
     const deptCounts = context.allEmployees.reduce((acc, emp) => {
       const dept = emp.department || "Unassigned";
@@ -257,68 +213,30 @@ Respond with a confirmation and let them know the action has been noted. The UI 
       return acc;
     }, {} as Record<string, number>);
 
-    prompt += `
-EMPLOYEE HEADCOUNT: ${context.allEmployees.length}
-BY DEPARTMENT:
-${Object.entries(deptCounts).map(([dept, count]) => `• ${dept}: ${count}`).join("\n")}
-
-EMPLOYEE LIST:
-${context.allEmployees.slice(0, 30).map(e => `• ${e.full_name || "Unknown"} (${e.department || "No dept"})`).join("\n")}
-`;
+    prompt += `HEADCOUNT: ${context.allEmployees.length}\n`;
+    prompt += Object.entries(deptCounts).map(([d, c]) => `• ${d}: ${c}`).join("\n");
   }
 
-  // All leave requests
+  // Leave requests
   if (context.teamLeaveRequests && context.teamLeaveRequests.length > 0) {
-    const leaveStats = {
-      pending: context.teamLeaveRequests.filter(l => l.status === "pending").length,
-      approved: context.teamLeaveRequests.filter(l => l.status === "approved").length,
-      rejected: context.teamLeaveRequests.filter(l => l.status === "rejected").length,
-    };
-
-    prompt += `
-=== LEAVE REQUESTS OVERVIEW ===
-Total: ${context.teamLeaveRequests.length} | ⚠️ Pending: ${leaveStats.pending} | ✓ Approved: ${leaveStats.approved} | ✗ Rejected: ${leaveStats.rejected}
-
-Recent Requests:
-${context.teamLeaveRequests.slice(0, 15).map(l => `• ID: ${l.id.substring(0, 8)} | Employee: ${(l as any).employee_name || l.user_id.substring(0, 8)} | ${l.leave_type} (${l.start_date} to ${l.end_date}) - ${l.status.toUpperCase()}`).join("\n")}
-
-💡 TIP: You can approve or reject these requests by telling me, e.g., "Approve the leave for [employee name]"
-`;
+    const pending = context.teamLeaveRequests.filter(l => l.status === "pending");
+    prompt += `\n\n⚠️ PENDING LEAVES: ${pending.length}\n`;
+    prompt += pending.slice(0, 10).map(l => {
+      const name = l.employee_name || `User ${l.user_id.substring(0, 6)}`;
+      return `• ID:${l.id.substring(0, 8)} | ${name} | ${l.leave_type} | ${l.start_date} to ${l.end_date}`;
+    }).join("\n");
   }
 
-  // All tasks for workload analysis
+  // Task metrics
   if (context.teamTasks && context.teamTasks.length > 0) {
-    prompt += `
-=== ORGANIZATION TASK METRICS ===
-Total Tasks: ${context.teamTasks.length}
-- Pending: ${context.teamTasks.filter(t => t.status === "pending").length}
-- In Progress: ${context.teamTasks.filter(t => t.status === "in_progress").length}
-- Completed: ${context.teamTasks.filter(t => t.status === "completed").length}
-- High Priority: ${context.teamTasks.filter(t => t.priority === "high").length}
-`;
+    prompt += `\n\nORG TASKS: ${context.teamTasks.length} total, ${context.teamTasks.filter(t => t.priority === "high").length} high-priority`;
   }
 
-  // Full policies for HR
+  // Policies
   if (context.policies && context.policies.length > 0) {
-    prompt += `
-=== COMPLETE COMPANY POLICIES ===
-${context.policies.map(p => `
-### ${p.title} [${p.category || "General"}]
-${p.content}
-`).join("\n---\n")}
-`;
+    prompt += `\n\nPOLICIES: ${context.policies.length} active\n`;
+    prompt += context.policies.slice(0, 5).map(p => `• ${p.title}`).join("\n");
   }
-
-  prompt += `
-=== HR ASSISTANT CAPABILITIES ===
-- Provide detailed policy information and help draft new policies
-- Process leave approvals/rejections when instructed
-- Analyze leave patterns and recommend policy changes
-- Identify workload imbalances across the organization
-- Answer employee queries about policies (as if you were HR)
-- Generate insights about organizational health
-- Help with compliance questions based on existing policies
-`;
 
   return prompt;
 }
@@ -334,13 +252,9 @@ Deno.serve(async (req) => {
       throw new Error("LOVABLE_API_KEY not configured");
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
     const { messages, userRole, userId, context }: RequestBody = await req.json();
 
-    // Build role-specific system prompt with full context
+    // Build role-specific system prompt
     let systemPrompt = "";
     
     if (userRole === "employee") {
@@ -351,8 +265,7 @@ Deno.serve(async (req) => {
       systemPrompt = buildHRSystemPrompt(context);
     }
 
-    console.log(`Processing ${userRole} query for user ${userId}`);
-    console.log(`Context: ${context.tasks?.length || 0} tasks, ${context.leaveRequests?.length || 0} leaves, ${context.policies?.length || 0} policies`);
+    console.log(`[NEXUS] ${userRole} query from ${userId}`);
 
     const allMessages: ChatMessage[] = [
       { role: "system", content: systemPrompt },
@@ -368,8 +281,8 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
         messages: allMessages,
-        max_tokens: 1500,
-        temperature: 0.5, // Lower temperature for more consistent, factual responses
+        max_tokens: 500, // Shorter for concise responses
+        temperature: 0.3, // Lower for consistent, factual responses
       }),
     });
 
@@ -379,14 +292,8 @@ Deno.serve(async (req) => {
       
       if (response.status === 429) {
         return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please wait a moment and try again." }),
+          JSON.stringify({ error: "Rate limited. Try again shortly." }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "AI service temporarily unavailable. Please try again later." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       
@@ -394,20 +301,18 @@ Deno.serve(async (req) => {
     }
 
     const data = await response.json();
-    console.log("AI Response received:", JSON.stringify(data).substring(0, 200));
     
-    // Safe access with proper null checks
     const choices = data?.choices;
     const assistantMessage = (choices && choices.length > 0 && choices[0]?.message?.content) 
       ? choices[0].message.content 
-      : "I apologize, but I couldn't generate a response. Please try again.";
+      : "Error generating response. Try again.";
 
     return new Response(
       JSON.stringify({ message: assistantMessage }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     console.error("Error in nexus-chat:", error);
     return new Response(
       JSON.stringify({ error: errorMessage }),
