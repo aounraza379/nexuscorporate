@@ -19,6 +19,7 @@ import {
   Wallet,
   Heart,
   BarChart3,
+  CalendarCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -26,6 +27,7 @@ const navItems = {
   employee: [
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
     { icon: ListTodo, label: "My Tasks", path: "/dashboard/tasks" },
+    { icon: CalendarCheck, label: "Leave", path: "/dashboard/leave" },
     { icon: Wallet, label: "Salary", path: "/dashboard/salary" },
     { icon: Heart, label: "Wellness", path: "/dashboard/wellness" },
     { icon: FileText, label: "Policies", path: "/dashboard/policies" },
@@ -35,12 +37,14 @@ const navItems = {
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
     { icon: Users, label: "Team", path: "/dashboard/team" },
     { icon: ListTodo, label: "Tasks", path: "/dashboard/tasks" },
+    { icon: CalendarCheck, label: "Leave Requests", path: "/dashboard/leave" },
     { icon: BarChart3, label: "Analytics", path: "/dashboard/analytics" },
     { icon: Megaphone, label: "Announcements", path: "/dashboard/announcements" },
   ],
   hr: [
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
     { icon: Users, label: "Employees", path: "/dashboard/employees" },
+    { icon: CalendarCheck, label: "Leave Requests", path: "/dashboard/leave" },
     { icon: FileText, label: "Policies", path: "/dashboard/policies" },
     { icon: Wallet, label: "Payroll", path: "/dashboard/payroll" },
     { icon: BarChart3, label: "Analytics", path: "/dashboard/analytics" },

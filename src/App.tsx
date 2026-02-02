@@ -12,6 +12,9 @@ import LandingPage from "./pages/LandingPage";
 import AuthPage from "./pages/AuthPage";
 import DashboardLayout from "./layouts/DashboardLayout";
 import DashboardHome from "./pages/DashboardHome";
+import TasksPage from "./pages/TasksPage";
+import LeavePage from "./pages/LeavePage";
+import PoliciesPage from "./pages/PoliciesPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -41,14 +44,14 @@ function AppRoutes() {
         }
       >
         <Route index element={<DashboardHome />} />
-        {/* Placeholder routes for future pages */}
-        <Route path="tasks" element={<DashboardHome />} />
+        <Route path="tasks" element={<TasksPage />} />
+        <Route path="leave" element={<LeavePage />} />
+        <Route path="policies" element={<PoliciesPage />} />
         <Route path="team" element={<DashboardHome />} />
         <Route path="employees" element={<DashboardHome />} />
         <Route path="salary" element={<DashboardHome />} />
         <Route path="payroll" element={<DashboardHome />} />
         <Route path="wellness" element={<DashboardHome />} />
-        <Route path="policies" element={<DashboardHome />} />
         <Route path="analytics" element={<DashboardHome />} />
         <Route path="announcements" element={<DashboardHome />} />
         <Route path="settings" element={<DashboardHome />} />

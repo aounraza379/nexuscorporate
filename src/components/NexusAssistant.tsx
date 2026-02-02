@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
+import { useNexusChat } from "@/hooks/useNexusChat";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import ReactMarkdown from "react-markdown";
 import {
   Bot,
   Send,
@@ -13,14 +15,8 @@ import {
   Briefcase,
   Shield,
   Loader2,
+  Trash2,
 } from "lucide-react";
-
-interface Message {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  timestamp: Date;
-}
 
 interface NexusAssistantProps {
   isOpen: boolean;
@@ -30,54 +26,30 @@ interface NexusAssistantProps {
 const rolePersonas = {
   employee: {
     icon: <User className="w-4 h-4" />,
-    greeting: "Hello! I'm your Nexus Career Coach. I can help you with tasks, company policies, and career guidance.",
-    systemPrompt: "You are a helpful career coach and policy guide for employees.",
+    greeting: "Hello! I'm your Nexus Career Coach. I can help you with tasks, company policies, leave requests, and career guidance. Ask me anything!",
   },
   manager: {
     icon: <Briefcase className="w-4 h-4" />,
-    greeting: "Welcome, Manager! I can assist with team analytics, task approvals, and burnout detection insights.",
-    systemPrompt: "You are a management assistant helping with team oversight and analytics.",
+    greeting: "Welcome, Manager! I can assist with team analytics, task management, leave approvals, and burnout detection insights.",
   },
   hr: {
     icon: <Shield className="w-4 h-4" />,
-    greeting: "HR Admin access granted. I'm ready to help with policies, payroll queries, and organizational insights.",
-    systemPrompt: "You are an HR analytics and policy enforcement assistant.",
+    greeting: "HR Admin access granted. I'm ready to help with policies, payroll queries, employee management, and organizational insights.",
   },
 };
 
 export function NexusAssistant({ isOpen, onClose }: NexusAssistantProps) {
-  const { userRole, profile } = useAuth();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const { userRole } = useAuth();
+  const { messages, isLoading, sendMessage, clearMessages } = useNexusChat();
   const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
 
   const persona = rolePersonas[userRole || "employee"];
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: input.trim(),
-      timestamp: new Date(),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
+    const message = input.trim();
     setInput("");
-    setIsLoading(true);
-
-    // Simulate AI response (to be replaced with actual Lovable AI integration)
-    setTimeout(() => {
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: getSimulatedResponse(input.trim(), userRole || "employee"),
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
-      setIsLoading(false);
-    }, 1500);
+    await sendMessage(message);
   };
 
   return (
@@ -111,9 +83,16 @@ export function NexusAssistant({ isOpen, onClose }: NexusAssistantProps) {
                 </div>
               </div>
             </div>
-            <Button variant="ghost" size="icon" onClick={onClose}>
-              <X className="w-5 h-5" />
-            </Button>
+            <div className="flex items-center gap-1">
+              {messages.length > 0 && (
+                <Button variant="ghost" size="icon" onClick={clearMessages} title="Clear chat">
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              )}
+              <Button variant="ghost" size="icon" onClick={onClose}>
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
           </div>
 
           {/* Messages */}
@@ -132,7 +111,7 @@ export function NexusAssistant({ isOpen, onClose }: NexusAssistantProps) {
                   <div className="glass-card rounded-2xl rounded-tl-sm p-3 max-w-[80%]">
                     <p className="text-sm">{persona.greeting}</p>
                     <p className="text-xs text-muted-foreground mt-2">
-                      Ask me anything about policies, tasks, or your workspace.
+                      I have access to your tasks and company policies to provide accurate answers.
                     </p>
                   </div>
                 </motion.div>
@@ -144,7 +123,7 @@ export function NexusAssistant({ isOpen, onClose }: NexusAssistantProps) {
                   key={message.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
+                  transition={{ delay: index * 0.05 }}
                   className={`flex gap-3 ${
                     message.role === "user" ? "flex-row-reverse" : ""
                   }`}
@@ -169,7 +148,13 @@ export function NexusAssistant({ isOpen, onClose }: NexusAssistantProps) {
                         : "glass-card rounded-tl-sm"
                     }`}
                   >
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    {message.role === "assistant" ? (
+                      <div className="text-sm prose prose-sm prose-invert max-w-none">
+                        <ReactMarkdown>{message.content}</ReactMarkdown>
+                      </div>
+                    ) : (
+                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    )}
                   </div>
                 </motion.div>
               ))}
@@ -230,40 +215,11 @@ export function NexusAssistant({ isOpen, onClose }: NexusAssistantProps) {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground text-center mt-2">
-              Powered by NexusAI • Context-aware responses
+              Powered by Lovable AI • Context-aware responses
             </p>
           </div>
         </motion.div>
       )}
     </AnimatePresence>
   );
-}
-
-// Simulated responses (to be replaced with actual AI)
-function getSimulatedResponse(input: string, role: string): string {
-  const lowerInput = input.toLowerCase();
-  
-  if (lowerInput.includes("policy") || lowerInput.includes("policies")) {
-    return "Based on our company policies, I can help you with:\n\n• Remote Work Policy\n• Leave & PTO Guidelines\n• Code of Conduct\n• Expense Reimbursement\n\nWhich policy would you like to know more about?";
-  }
-  
-  if (lowerInput.includes("task") || lowerInput.includes("tasks")) {
-    return "I can see you have 3 pending tasks this week. Would you like me to:\n\n1. Prioritize them by urgency\n2. Show task details\n3. Suggest optimal completion order\n\nJust let me know!";
-  }
-  
-  if (lowerInput.includes("salary") || lowerInput.includes("pay")) {
-    if (role === "hr") {
-      return "As HR, you have access to payroll analytics. The current payroll cycle closes on the 25th. Would you like to see department-wise salary distribution or pending approvals?";
-    }
-    return "Your salary information is available in the Salary section. For any discrepancies or questions, please contact HR through the official channel.";
-  }
-  
-  if (lowerInput.includes("burnout") || lowerInput.includes("wellness")) {
-    if (role === "manager" || role === "hr") {
-      return "Based on recent sentiment analysis, 2 team members show potential burnout indicators. I recommend reviewing their task load and scheduling 1-on-1 check-ins this week.";
-    }
-    return "Your wellness score this week is 78/100. I notice you've been working late. Consider taking short breaks and using your wellness benefits. Would you like to see available wellness resources?";
-  }
-  
-  return `I understand you're asking about "${input}". As your ${role === "employee" ? "career coach" : role === "manager" ? "management assistant" : "HR assistant"}, I'm here to help. Could you provide more details about what you'd like to know?`;
 }
