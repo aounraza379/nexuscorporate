@@ -15,6 +15,14 @@ import DashboardHome from "./pages/DashboardHome";
 import TasksPage from "./pages/TasksPage";
 import LeavePage from "./pages/LeavePage";
 import PoliciesPage from "./pages/PoliciesPage";
+import AnalyticsPage from "./pages/AnalyticsPage";
+import AnnouncementsPage from "./pages/AnnouncementsPage";
+import SalaryPage from "./pages/SalaryPage";
+import WellnessPage from "./pages/WellnessPage";
+import PayrollPage from "./pages/PayrollPage";
+import TeamPage from "./pages/TeamPage";
+import EmployeesPage from "./pages/EmployeesPage";
+import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -47,14 +55,14 @@ function AppRoutes() {
         <Route path="tasks" element={<TasksPage />} />
         <Route path="leave" element={<LeavePage />} />
         <Route path="policies" element={<PoliciesPage />} />
-        <Route path="team" element={<DashboardHome />} />
-        <Route path="employees" element={<DashboardHome />} />
-        <Route path="salary" element={<DashboardHome />} />
-        <Route path="payroll" element={<DashboardHome />} />
-        <Route path="wellness" element={<DashboardHome />} />
-        <Route path="analytics" element={<DashboardHome />} />
-        <Route path="announcements" element={<DashboardHome />} />
-        <Route path="settings" element={<DashboardHome />} />
+        <Route path="team" element={<TeamPage />} />
+        <Route path="employees" element={<EmployeesPage />} />
+        <Route path="salary" element={<SalaryPage />} />
+        <Route path="payroll" element={<PayrollPage />} />
+        <Route path="wellness" element={<WellnessPage />} />
+        <Route path="analytics" element={<AnalyticsPage />} />
+        <Route path="announcements" element={<AnnouncementsPage />} />
+        <Route path="settings" element={<SettingsPage />} />
       </Route>
       
       {/* Catch all */}
