@@ -2,9 +2,12 @@ import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { AgentNavigatorProvider } from "@/contexts/AgentNavigatorContext";
 import { NexusLogo } from "@/components/NexusLogo";
 import { NexusAssistant } from "@/components/NexusAssistant";
+import { LiveSyncIndicator } from "@/components/LiveSyncIndicator";
 import { useGlobalNotifications } from "@/hooks/useGlobalNotifications";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard,
@@ -53,18 +56,29 @@ const navItems = {
   ],
 };
 
-export default function DashboardLayout() {
+function DashboardContent() {
   const { user, profile, userRole, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Open assistant callback for notifications
   const openAssistant = useCallback(() => setAssistantOpen(true), []);
 
   // Global real-time notifications
   useGlobalNotifications(openAssistant);
+
+  // Real-time sync for announcements, leave_requests, tasks
+  const { isConnected } = useRealtimeSync({
+    showToasts: true,
+    onSync: (table, event) => {
+      // Brief syncing indicator
+      setIsSyncing(true);
+      setTimeout(() => setIsSyncing(false), 500);
+    },
+  });
 
   const currentNav = navItems[userRole || "employee"];
 
@@ -80,6 +94,9 @@ export default function DashboardLayout() {
 
   return (
     <div className="min-h-screen gradient-mesh flex">
+      {/* Live Sync Indicator */}
+      <LiveSyncIndicator isSyncing={isSyncing} isConnected={isConnected} />
+
       {/* Sidebar */}
       <motion.aside
         animate={{ width: sidebarCollapsed ? 80 : 280 }}
@@ -199,7 +216,7 @@ export default function DashboardLayout() {
             className="gap-2"
           >
             <Bot className="w-4 h-4" />
-            <span className="hidden sm:inline">Nexus Assistant</span>
+            <span className="hidden sm:inline">Nexus Agent</span>
           </Button>
         </header>
 
@@ -223,5 +240,14 @@ export default function DashboardLayout() {
         />
       )}
     </div>
+  );
+}
+
+// Wrap with AgentNavigatorProvider
+export default function DashboardLayout() {
+  return (
+    <AgentNavigatorProvider>
+      <DashboardContent />
+    </AgentNavigatorProvider>
   );
 }

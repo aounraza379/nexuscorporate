@@ -2,12 +2,11 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNexusChat } from "@/hooks/useNexusChat";
-import { useAgentActions } from "@/hooks/useAgentActions";
+import { useAgentToolbox } from "@/hooks/useAgentToolbox";
 import { useLeaveRequests } from "@/hooks/useLeaveRequests";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import {
   Bot,
@@ -23,6 +22,7 @@ import {
   XCircle,
   AlertTriangle,
   Zap,
+  Navigation,
 } from "lucide-react";
 
 interface NexusAssistantProps {
@@ -33,33 +33,54 @@ interface NexusAssistantProps {
 const roleConfig = {
   employee: {
     icon: <User className="w-4 h-4" />,
-    greeting: "I have access to your tasks, leave, and policies.",
-    suggestions: ["What are my pending tasks?", "Leave policy?", "My leave balance?"],
+    greeting: "I can check tasks, leave, policies. What do you need?",
+    suggestions: ["My pending tasks", "Leave balance", "Go to wellness"],
   },
   manager: {
     icon: <Briefcase className="w-4 h-4" />,
-    greeting: "I can approve leaves, analyze team data, and execute actions.",
-    suggestions: ["Pending leave approvals", "Approve all leaves", "Team workload"],
+    greeting: "Ready to execute. Pending leaves, approvals, analytics?",
+    suggestions: ["Pending approvals", "Approve all leaves", "Show analytics"],
   },
   hr: {
     icon: <Shield className="w-4 h-4" />,
-    greeting: "Full org access. I can process leaves and manage announcements.",
+    greeting: "Full org access. What action should I take?",
     suggestions: ["Org headcount", "Pending leaves", "Create announcement"],
   },
 };
 
+// Navigation intent detection
+const NAVIGATION_PATTERNS = [
+  { pattern: /\b(show|go to|open|navigate to|take me to)\s+(analytics|reports|stats)/i, route: "analytics" },
+  { pattern: /\b(show|go to|open|navigate to|take me to)\s+(tasks?|my tasks)/i, route: "tasks" },
+  { pattern: /\b(show|go to|open|navigate to|take me to)\s+(leave|leave requests)/i, route: "leave" },
+  { pattern: /\b(show|go to|open|navigate to|take me to)\s+(announcements?|news)/i, route: "announcements" },
+  { pattern: /\b(show|go to|open|navigate to|take me to)\s+(team|my team)/i, route: "team" },
+  { pattern: /\b(show|go to|open|navigate to|take me to)\s+(employees?|staff)/i, route: "employees" },
+  { pattern: /\b(show|go to|open|navigate to|take me to)\s+(settings?|preferences)/i, route: "settings" },
+  { pattern: /\b(show|go to|open|navigate to|take me to)\s+(policies?)/i, route: "policies" },
+  { pattern: /\b(show|go to|open|navigate to|take me to)\s+(dashboard|home|overview)/i, route: "dashboard" },
+  { pattern: /\b(show|go to|open|navigate to|take me to)\s+(salary|pay)/i, route: "salary" },
+  { pattern: /\b(show|go to|open|navigate to|take me to)\s+(wellness|health)/i, route: "wellness" },
+  { pattern: /\b(show|go to|open|navigate to|take me to)\s+(payroll)/i, route: "payroll" },
+];
+
 export function NexusAssistant({ isOpen, onClose }: NexusAssistantProps) {
   const { userRole } = useAuth();
   const { messages, isLoading, sendMessage, clearMessages } = useNexusChat();
-  const { approveLeave, rejectLeave, canExecuteActions } = useAgentActions();
+  const { 
+    approveLeave, 
+    rejectLeave, 
+    triggerNavigation, 
+    canExecuteActions, 
+    isSyncing,
+    currentRoute 
+  } = useAgentToolbox();
   const { leaveRequests } = useLeaveRequests();
   const [input, setInput] = useState("");
   const [processingAction, setProcessingAction] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const config = roleConfig[userRole || "employee"];
-
-  // Pending leave requests for quick actions
   const pendingLeaves = leaveRequests?.filter(l => l.status === "pending") || [];
 
   // Auto-scroll on new messages
@@ -69,10 +90,24 @@ export function NexusAssistant({ isOpen, onClose }: NexusAssistantProps) {
     }
   }, [messages]);
 
+  // Handle message with navigation detection
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
     const message = input.trim();
     setInput("");
+
+    // Check for navigation intent first
+    for (const { pattern, route } of NAVIGATION_PATTERNS) {
+      if (pattern.test(message)) {
+        const result = triggerNavigation(route);
+        if (result.success) {
+          // Add a quick response without calling the API
+          await sendMessage(message);
+          return;
+        }
+      }
+    }
+
     await sendMessage(message);
   };
 
@@ -94,6 +129,10 @@ export function NexusAssistant({ isOpen, onClose }: NexusAssistantProps) {
     }
   };
 
+  const handleQuickNav = (route: string) => {
+    triggerNavigation(route);
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -104,14 +143,28 @@ export function NexusAssistant({ isOpen, onClose }: NexusAssistantProps) {
           transition={{ type: "spring", damping: 25, stiffness: 200 }}
           className="fixed right-0 top-0 h-full w-full sm:w-[400px] z-50 flex flex-col bg-card/95 backdrop-blur-xl border-l border-border shadow-2xl"
         >
-          {/* Compact Header */}
+          {/* Header with sync indicator */}
           <div className="flex items-center justify-between p-3 border-b border-border">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center relative">
                 <Bot className="w-4 h-4 text-white" />
+                {isSyncing && (
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                    className="absolute inset-0 rounded-full border-2 border-transparent border-t-primary"
+                  />
+                )}
               </div>
               <div>
-                <h3 className="font-semibold text-sm">Nexus</h3>
+                <div className="flex items-center gap-1.5">
+                  <h3 className="font-semibold text-sm">Nexus</h3>
+                  {isSyncing && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/20 text-primary animate-pulse">
+                      Syncing...
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
                   {config.icon}
                   <span className="capitalize">{userRole}</span>
@@ -135,7 +188,7 @@ export function NexusAssistant({ isOpen, onClose }: NexusAssistantProps) {
             </div>
           </div>
 
-          {/* Pending Actions Bar (for managers/HR) */}
+          {/* Pending Actions Bar */}
           {canExecuteActions && pendingLeaves.length > 0 && (
             <div className="p-2 bg-primary/5 border-b border-primary/20">
               <div className="flex items-center gap-2 text-xs mb-2">
@@ -181,6 +234,45 @@ export function NexusAssistant({ isOpen, onClose }: NexusAssistantProps) {
             </div>
           )}
 
+          {/* Quick Nav (always visible) */}
+          <div className="p-2 border-b border-border flex gap-1 overflow-x-auto">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs gap-1 shrink-0"
+              onClick={() => handleQuickNav("dashboard")}
+            >
+              <Navigation className="w-3 h-3" />
+              Dashboard
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs shrink-0"
+              onClick={() => handleQuickNav("tasks")}
+            >
+              Tasks
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs shrink-0"
+              onClick={() => handleQuickNav("leave")}
+            >
+              Leave
+            </Button>
+            {(userRole === "manager" || userRole === "hr") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs shrink-0"
+                onClick={() => handleQuickNav("analytics")}
+              >
+                Analytics
+              </Button>
+            )}
+          </div>
+
           {/* Chat Area */}
           <ScrollArea className="flex-1 p-3" ref={scrollRef}>
             <div className="space-y-3">
@@ -200,7 +292,6 @@ export function NexusAssistant({ isOpen, onClose }: NexusAssistantProps) {
                     </div>
                   </div>
                   
-                  {/* Quick suggestions */}
                   <div className="flex flex-wrap gap-1.5 pl-9">
                     {config.suggestions.map((suggestion, idx) => (
                       <button
@@ -288,7 +379,7 @@ export function NexusAssistant({ isOpen, onClose }: NexusAssistantProps) {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-                placeholder="Ask Nexus..."
+                placeholder="Ask or command Nexus..."
                 className="flex-1 h-9 text-sm"
                 disabled={isLoading}
               />
