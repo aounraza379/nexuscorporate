@@ -26,15 +26,33 @@ interface NexusAssistantProps {
 const rolePersonas = {
   employee: {
     icon: <User className="w-4 h-4" />,
-    greeting: "Hello! I'm your Nexus Career Coach. I can help you with tasks, company policies, leave requests, and career guidance. Ask me anything!",
+    greeting: "Hello! I'm NEXUS, your personal HR Assistant. I have access to your tasks, leave history, and all company policies. Ask me about:",
+    suggestions: [
+      "What are my pending tasks?",
+      "What's the leave policy?",
+      "How many leaves have I taken?",
+      "What's my task workload?",
+    ],
   },
   manager: {
     icon: <Briefcase className="w-4 h-4" />,
-    greeting: "Welcome, Manager! I can assist with team analytics, task management, leave approvals, and burnout detection insights.",
+    greeting: "Welcome, Manager! I'm NEXUS, your management assistant. I can see all team leave requests, tasks, and policies. Ask me about:",
+    suggestions: [
+      "Show pending leave approvals",
+      "Team workload summary",
+      "Any burnout risks?",
+      "Policy for remote work",
+    ],
   },
   hr: {
     icon: <Shield className="w-4 h-4" />,
-    greeting: "HR Admin access granted. I'm ready to help with policies, payroll queries, employee management, and organizational insights.",
+    greeting: "HR Admin access granted. I'm NEXUS, your HR analytics assistant with full access to employee data, policies, and organization metrics. Ask me about:",
+    suggestions: [
+      "Organization headcount",
+      "Leave request analytics",
+      "Policy recommendations",
+      "Employee workload analysis",
+    ],
   },
 };
 
@@ -103,16 +121,33 @@ export function NexusAssistant({ isOpen, onClose }: NexusAssistantProps) {
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="flex gap-3"
+                  className="space-y-4"
                 >
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center flex-shrink-0">
-                    <Sparkles className="w-4 h-4 text-white" />
+                  <div className="flex gap-3">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center flex-shrink-0">
+                      <Sparkles className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="glass-card rounded-2xl rounded-tl-sm p-3 max-w-[85%]">
+                      <p className="text-sm font-medium">{persona.greeting}</p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        I only answer questions about company data and your work - nothing else!
+                      </p>
+                    </div>
                   </div>
-                  <div className="glass-card rounded-2xl rounded-tl-sm p-3 max-w-[80%]">
-                    <p className="text-sm">{persona.greeting}</p>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      I have access to your tasks and company policies to provide accurate answers.
-                    </p>
+                  
+                  {/* Quick suggestion buttons */}
+                  <div className="flex flex-wrap gap-2 pl-11">
+                    {persona.suggestions.map((suggestion, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => {
+                          setInput(suggestion);
+                        }}
+                        className="text-xs px-3 py-1.5 rounded-full bg-secondary/50 hover:bg-secondary text-foreground transition-colors border border-border/50"
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
                   </div>
                 </motion.div>
               )}
@@ -215,7 +250,7 @@ export function NexusAssistant({ isOpen, onClose }: NexusAssistantProps) {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground text-center mt-2">
-              Powered by Lovable AI • Context-aware responses
+              NEXUS RAG System • Company Data Only
             </p>
           </div>
         </motion.div>
