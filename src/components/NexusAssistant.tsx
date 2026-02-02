@@ -23,6 +23,7 @@ import {
   AlertTriangle,
   Zap,
   Navigation,
+  Activity,
 } from "lucide-react";
 
 interface NexusAssistantProps {
@@ -66,7 +67,7 @@ const NAVIGATION_PATTERNS = [
 
 export function NexusAssistant({ isOpen, onClose }: NexusAssistantProps) {
   const { userRole } = useAuth();
-  const { messages, isLoading, sendMessage, clearMessages } = useNexusChat();
+  const { messages, isLoading, isExecutingActions, sendMessage, clearMessages } = useNexusChat();
   const { 
     approveLeave, 
     rejectLeave, 
@@ -83,6 +84,9 @@ export function NexusAssistant({ isOpen, onClose }: NexusAssistantProps) {
   const config = roleConfig[userRole || "employee"];
   const pendingLeaves = leaveRequests?.filter(l => l.status === "pending") || [];
 
+  // Show syncing indicator when AI is executing actions
+  const showSyncing = isSyncing || isExecutingActions;
+
   // Auto-scroll on new messages
   useEffect(() => {
     if (scrollRef.current) {
@@ -90,24 +94,11 @@ export function NexusAssistant({ isOpen, onClose }: NexusAssistantProps) {
     }
   }, [messages]);
 
-  // Handle message with navigation detection
+  // Handle message - let the AI + action parser handle everything
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
     const message = input.trim();
     setInput("");
-
-    // Check for navigation intent first
-    for (const { pattern, route } of NAVIGATION_PATTERNS) {
-      if (pattern.test(message)) {
-        const result = triggerNavigation(route);
-        if (result.success) {
-          // Add a quick response without calling the API
-          await sendMessage(message);
-          return;
-        }
-      }
-    }
-
     await sendMessage(message);
   };
 
@@ -148,7 +139,7 @@ export function NexusAssistant({ isOpen, onClose }: NexusAssistantProps) {
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center relative">
                 <Bot className="w-4 h-4 text-white" />
-                {isSyncing && (
+                {showSyncing && (
                   <motion.div
                     animate={{ rotate: 360 }}
                     transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
@@ -159,10 +150,15 @@ export function NexusAssistant({ isOpen, onClose }: NexusAssistantProps) {
               <div>
                 <div className="flex items-center gap-1.5">
                   <h3 className="font-semibold text-sm">Nexus</h3>
-                  {isSyncing && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/20 text-primary animate-pulse">
-                      Syncing...
-                    </span>
+                  {showSyncing && (
+                    <motion.span 
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-primary/20 text-primary flex items-center gap-1"
+                    >
+                      <Activity className="w-2.5 h-2.5 animate-pulse" />
+                      {isExecutingActions ? "Executing..." : "Syncing..."}
+                    </motion.span>
                   )}
                 </div>
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -327,19 +323,47 @@ export function NexusAssistant({ isOpen, onClose }: NexusAssistantProps) {
                       <Bot className="w-3 h-3 text-white" />
                     )}
                   </div>
-                  <div
-                    className={`rounded-lg p-2.5 max-w-[85%] ${
-                      message.role === "user"
-                        ? "bg-primary text-primary-foreground rounded-tr-sm"
-                        : "bg-secondary/50 rounded-tl-sm"
-                    }`}
-                  >
-                    {message.role === "assistant" ? (
-                      <div className="text-sm prose prose-sm prose-invert max-w-none [&>p]:m-0 [&>ul]:m-0 [&>ul]:pl-4">
-                        <ReactMarkdown>{message.content}</ReactMarkdown>
-                      </div>
-                    ) : (
-                      <p className="text-sm">{message.content}</p>
+                  <div className="flex flex-col gap-1 max-w-[85%]">
+                    <div
+                      className={`rounded-lg p-2.5 ${
+                        message.role === "user"
+                          ? "bg-primary text-primary-foreground rounded-tr-sm"
+                          : "bg-secondary/50 rounded-tl-sm"
+                      }`}
+                    >
+                      {message.role === "assistant" ? (
+                        <div className="text-sm prose prose-sm prose-invert max-w-none [&>p]:m-0 [&>ul]:m-0 [&>ul]:pl-4">
+                          <ReactMarkdown>{message.content}</ReactMarkdown>
+                        </div>
+                      ) : (
+                        <p className="text-sm">{message.content}</p>
+                      )}
+                    </div>
+                    {/* Executed Actions Indicator */}
+                    {message.role === "assistant" && message.executedActions && message.executedActions.length > 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        className="flex flex-wrap gap-1 pl-1"
+                      >
+                        {message.executedActions.map((executed, idx) => (
+                          <span
+                            key={idx}
+                            className={`text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1 ${
+                              executed.result.success 
+                                ? "bg-green-500/20 text-green-400" 
+                                : "bg-red-500/20 text-red-400"
+                            }`}
+                          >
+                            {executed.result.success ? (
+                              <CheckCircle className="w-2.5 h-2.5" />
+                            ) : (
+                              <XCircle className="w-2.5 h-2.5" />
+                            )}
+                            {executed.action.type.replace("_", " ")}
+                          </span>
+                        ))}
+                      </motion.div>
                     )}
                   </div>
                 </motion.div>

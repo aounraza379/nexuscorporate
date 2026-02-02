@@ -4,12 +4,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTasks } from "./useTasks";
 import { usePolicies } from "./usePolicies";
 import { useLeaveRequests } from "./useLeaveRequests";
+import { useAgentActionParser, ParsedResponse } from "./useAgentActionParser";
 
 interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
+  executedActions?: ParsedResponse["executedActions"];
 }
 
 interface UserContext {
@@ -49,6 +51,7 @@ interface UserContext {
     end_date: string;
     status: string;
     reason: string | null;
+    employee_name?: string;
   }>;
   allEmployees?: Array<{
     id: string;
@@ -69,8 +72,10 @@ export function useNexusChat() {
   const { tasks } = useTasks();
   const { policies } = usePolicies();
   const { leaveRequests } = useLeaveRequests();
+  const { parseAndExecute } = useAgentActionParser();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isExecutingActions, setIsExecutingActions] = useState(false);
 
   // Build comprehensive context based on user role
   const buildContext = useCallback(async (): Promise<UserContext> => {
@@ -263,11 +268,18 @@ export function useNexusChat() {
 
       if (error) throw error;
 
+      // Parse AI response for actions and execute them
+      setIsExecutingActions(true);
+      const parsedResponse = await parseAndExecute(data.message);
+      setIsExecutingActions(false);
+
+      // Create assistant message with cleaned content (no JSON visible)
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: data.message,
+        content: parsedResponse.displayMessage || "Done.",
         timestamp: new Date(),
+        executedActions: parsedResponse.executedActions,
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
@@ -291,6 +303,7 @@ export function useNexusChat() {
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
+      setIsExecutingActions(false);
     }
   };
 
@@ -301,6 +314,7 @@ export function useNexusChat() {
   return {
     messages,
     isLoading,
+    isExecutingActions,
     sendMessage,
     clearMessages,
   };
