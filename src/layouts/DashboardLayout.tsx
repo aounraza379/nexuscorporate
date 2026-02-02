@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { NexusLogo } from "@/components/NexusLogo";
 import { NexusAssistant } from "@/components/NexusAssistant";
+import { useGlobalNotifications } from "@/hooks/useGlobalNotifications";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard,
@@ -58,6 +59,12 @@ export default function DashboardLayout() {
   const location = useLocation();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
+
+  // Open assistant callback for notifications
+  const openAssistant = useCallback(() => setAssistantOpen(true), []);
+
+  // Global real-time notifications
+  useGlobalNotifications(openAssistant);
 
   const currentNav = navItems[userRole || "employee"];
 

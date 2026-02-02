@@ -125,7 +125,26 @@ export function useNexusChat() {
         due_date: t.due_date,
       }));
 
-      // All leave requests for approval
+      // Fetch employee names for leave requests
+      const userIds = [...new Set(leaveRequests?.map(l => l.user_id) || [])];
+      let nameMap: Record<string, string> = {};
+      
+      if (userIds.length > 0) {
+        try {
+          const { data: profiles } = await supabase
+            .from("profiles")
+            .select("id, full_name")
+            .in("id", userIds);
+          
+          profiles?.forEach(p => {
+            nameMap[p.id] = p.full_name || "Unknown";
+          });
+        } catch (error) {
+          console.error("Error fetching profile names:", error);
+        }
+      }
+
+      // All leave requests for approval with employee names
       context.teamLeaveRequests = leaveRequests?.map(l => ({
         id: l.id,
         user_id: l.user_id,
@@ -134,6 +153,7 @@ export function useNexusChat() {
         end_date: l.end_date,
         status: l.status,
         reason: l.reason,
+        employee_name: nameMap[l.user_id] || undefined,
       }));
 
       // All team tasks
@@ -156,6 +176,7 @@ export function useNexusChat() {
     // HR context - full organization view
     if (userRole === "hr") {
       // Fetch all employees
+      let nameMap: Record<string, string> = {};
       try {
         const { data: allProfiles } = await supabase
           .from("profiles")
@@ -166,11 +187,15 @@ export function useNexusChat() {
           full_name: p.full_name,
           department: p.department,
         }));
+
+        allProfiles?.forEach(p => {
+          nameMap[p.id] = p.full_name || "Unknown";
+        });
       } catch (error) {
         console.error("Error fetching all profiles:", error);
       }
 
-      // All leave requests
+      // All leave requests with employee names
       context.teamLeaveRequests = leaveRequests?.map(l => ({
         id: l.id,
         user_id: l.user_id,
@@ -179,6 +204,7 @@ export function useNexusChat() {
         end_date: l.end_date,
         status: l.status,
         reason: l.reason,
+        employee_name: nameMap[l.user_id] || undefined,
       }));
 
       // All tasks
