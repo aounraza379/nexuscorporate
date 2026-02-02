@@ -366,7 +366,13 @@ Deno.serve(async (req) => {
     }
 
     const data = await response.json();
-    const assistantMessage = data.choices[0]?.message?.content || "I apologize, but I couldn't generate a response. Please try again.";
+    console.log("AI Response received:", JSON.stringify(data).substring(0, 200));
+    
+    // Safe access with proper null checks
+    const choices = data?.choices;
+    const assistantMessage = (choices && choices.length > 0 && choices[0]?.message?.content) 
+      ? choices[0].message.content 
+      : "I apologize, but I couldn't generate a response. Please try again.";
 
     return new Response(
       JSON.stringify({ message: assistantMessage }),
