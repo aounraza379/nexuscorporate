@@ -159,6 +159,16 @@ Department: ${context.profile?.department || "Not specified"}
 
 YOUR ROLE: Assist managers with team oversight, leave approvals, task management, and identifying potential issues like burnout.
 
+=== IMPORTANT: ACTION COMMANDS ===
+You have the AUTHORITY to process leave requests when the manager gives you permission.
+When a manager says things like:
+- "Approve leave request for [name]" 
+- "Reject the leave request"
+- "Approve all pending leaves"
+- "Yes, approve it"
+
+Respond with a confirmation and let them know the action has been noted. The UI will handle the actual approval/rejection.
+
 === YOUR PERSONAL WORK STATUS ===
 `;
 
@@ -174,9 +184,11 @@ ${context.tasks.map(t => `• [${t.status?.toUpperCase()}] ${t.title} (Priority:
   if (context.teamLeaveRequests && context.teamLeaveRequests.length > 0) {
     const pendingLeaves = context.teamLeaveRequests.filter(l => l.status === "pending");
     prompt += `
-=== TEAM LEAVE REQUESTS REQUIRING ACTION ===
-Pending Approvals: ${pendingLeaves.length}
-${context.teamLeaveRequests.map(l => `• User ${l.user_id.substring(0, 8)}... - ${l.leave_type} (${l.start_date} to ${l.end_date}) - STATUS: ${l.status.toUpperCase()}${l.reason ? ` | Reason: ${l.reason}` : ""}`).join("\n")}
+=== TEAM LEAVE REQUESTS REQUIRING YOUR ACTION ===
+⚠️ Pending Approvals: ${pendingLeaves.length}
+${context.teamLeaveRequests.map(l => `• Request ID: ${l.id.substring(0, 8)} | Employee: ${(l as any).employee_name || l.user_id.substring(0, 8)} | ${l.leave_type} (${l.start_date} to ${l.end_date}) - STATUS: ${l.status.toUpperCase()}${l.reason ? ` | Reason: ${l.reason}` : ""}`).join("\n")}
+
+💡 TIP: You can approve or reject these requests by telling me, e.g., "Approve the leave for [employee name]" or use the notification panel.
 `;
   }
 
@@ -208,6 +220,7 @@ ${context.policies.map(p => `### ${p.title}\n${p.content.substring(0, 500)}...`)
   prompt += `
 === HOW TO HELP MANAGERS ===
 - Summarize pending leave requests and recommend actions
+- When asked to approve/reject leaves, confirm the action
 - Identify employees with high workloads (many pending/in-progress tasks)
 - Answer policy questions to help make decisions
 - Flag potential burnout risks (employees with many overdue tasks)
@@ -224,6 +237,15 @@ You are NEXUS, the HR Analytics & Policy Assistant for ${context.profile?.full_n
 
 YOUR ROLE: Provide comprehensive HR support including policy management, employee data analysis, leave oversight, and organizational insights.
 
+=== IMPORTANT: ACTION COMMANDS ===
+You have the AUTHORITY to process leave requests when HR gives you permission.
+When HR says things like:
+- "Approve leave request for [name]" 
+- "Reject the leave request"
+- "Approve all pending leaves"
+
+Respond with a confirmation and let them know the action has been noted. The UI will handle the actual approval/rejection.
+
 === ORGANIZATION OVERVIEW ===
 `;
 
@@ -239,6 +261,9 @@ YOUR ROLE: Provide comprehensive HR support including policy management, employe
 EMPLOYEE HEADCOUNT: ${context.allEmployees.length}
 BY DEPARTMENT:
 ${Object.entries(deptCounts).map(([dept, count]) => `• ${dept}: ${count}`).join("\n")}
+
+EMPLOYEE LIST:
+${context.allEmployees.slice(0, 30).map(e => `• ${e.full_name || "Unknown"} (${e.department || "No dept"})`).join("\n")}
 `;
   }
 
@@ -252,10 +277,12 @@ ${Object.entries(deptCounts).map(([dept, count]) => `• ${dept}: ${count}`).joi
 
     prompt += `
 === LEAVE REQUESTS OVERVIEW ===
-Total: ${context.teamLeaveRequests.length} | Pending: ${leaveStats.pending} | Approved: ${leaveStats.approved} | Rejected: ${leaveStats.rejected}
+Total: ${context.teamLeaveRequests.length} | ⚠️ Pending: ${leaveStats.pending} | ✓ Approved: ${leaveStats.approved} | ✗ Rejected: ${leaveStats.rejected}
 
 Recent Requests:
-${context.teamLeaveRequests.slice(0, 15).map(l => `• User ${l.user_id.substring(0, 8)}... - ${l.leave_type} (${l.start_date} to ${l.end_date}) - ${l.status.toUpperCase()}`).join("\n")}
+${context.teamLeaveRequests.slice(0, 15).map(l => `• ID: ${l.id.substring(0, 8)} | Employee: ${(l as any).employee_name || l.user_id.substring(0, 8)} | ${l.leave_type} (${l.start_date} to ${l.end_date}) - ${l.status.toUpperCase()}`).join("\n")}
+
+💡 TIP: You can approve or reject these requests by telling me, e.g., "Approve the leave for [employee name]"
 `;
   }
 
@@ -285,6 +312,7 @@ ${p.content}
   prompt += `
 === HR ASSISTANT CAPABILITIES ===
 - Provide detailed policy information and help draft new policies
+- Process leave approvals/rejections when instructed
 - Analyze leave patterns and recommend policy changes
 - Identify workload imbalances across the organization
 - Answer employee queries about policies (as if you were HR)
