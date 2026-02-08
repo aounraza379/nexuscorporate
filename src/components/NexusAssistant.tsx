@@ -350,17 +350,17 @@ export function NexusAssistant({ isOpen, onClose }: NexusAssistantProps) {
                           <span
                             key={idx}
                             className={`text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1 ${
-                              executed.result.success 
+                              executed.success 
                                 ? "bg-green-500/20 text-green-400" 
                                 : "bg-red-500/20 text-red-400"
                             }`}
                           >
-                            {executed.result.success ? (
+                            {executed.success ? (
                               <CheckCircle className="w-2.5 h-2.5" />
                             ) : (
                               <XCircle className="w-2.5 h-2.5" />
                             )}
-                            {executed.action.type.replace("_", " ")}
+                            {executed.function.replace("_", " ")}
                           </span>
                         ))}
                       </motion.div>

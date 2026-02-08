@@ -2,192 +2,252 @@ import { useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAgentNavigator } from "@/contexts/AgentNavigatorContext";
 import { toast } from "sonner";
+
+/**
+ * Structured action from AI response
+ */
+export interface AgentAction {
+  function: 
+    | "approve_leave" 
+    | "reject_leave" 
+    | "update_task" 
+    | "create_task" 
+    | "create_announcement" 
+    | "navigate"
+    | "submit_leave";
+  params: Record<string, string | null>;
+}
 
 export interface ActionResult {
   success: boolean;
   message: string;
-  data?: unknown;
+  function: string;
 }
 
 /**
- * Hook providing agentic actions the AI can execute.
- * All actions validate user role via JWT before execution.
+ * Parse AI response to extract structured JSON actions
+ */
+export function parseActionsFromResponse(response: string): {
+  displayMessage: string;
+  actions: AgentAction[];
+} {
+  // Find JSON block in response
+  const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
+  
+  let actions: AgentAction[] = [];
+  let displayMessage = response;
+
+  if (jsonMatch && jsonMatch[1]) {
+    try {
+      const parsed = JSON.parse(jsonMatch[1].trim());
+      if (parsed.actions && Array.isArray(parsed.actions)) {
+        actions = parsed.actions;
+      }
+      // Remove the JSON block from display message
+      displayMessage = response.replace(/```json[\s\S]*?```/g, "").trim();
+    } catch (error) {
+      console.error("Failed to parse action JSON:", error);
+    }
+  }
+
+  // Clean up extra whitespace
+  displayMessage = displayMessage.replace(/\n{3,}/g, "\n\n").trim();
+
+  return { displayMessage, actions };
+}
+
+/**
+ * Hook that executes parsed AI actions against the database
  */
 export function useAgentActions() {
   const { user, userRole } = useAuth();
   const queryClient = useQueryClient();
-
-  const approveLeave = useCallback(
-    async (leaveId: string): Promise<ActionResult> => {
-      // Validate role
-      if (userRole !== "manager" && userRole !== "hr") {
-        return { success: false, message: "Unauthorized: Only managers and HR can approve leave." };
-      }
-
-      try {
-        const { error } = await supabase
-          .from("leave_requests")
-          .update({
-            status: "approved",
-            reviewed_by: user?.id,
-            reviewed_at: new Date().toISOString(),
-          })
-          .eq("id", leaveId)
-          .eq("status", "pending"); // Only approve pending requests
-
-        if (error) throw error;
-
-        // Immediately invalidate to sync UI
-        await queryClient.invalidateQueries({ queryKey: ["leave-requests"] });
-        
-        toast.success("✅ Leave approved successfully");
-        return { success: true, message: "Leave request approved." };
-      } catch (error: any) {
-        const msg = error.message || "Failed to approve leave request";
-        toast.error(msg);
-        return { success: false, message: msg };
-      }
-    },
-    [user?.id, userRole, queryClient]
-  );
-
-  const rejectLeave = useCallback(
-    async (leaveId: string): Promise<ActionResult> => {
-      if (userRole !== "manager" && userRole !== "hr") {
-        return { success: false, message: "Unauthorized: Only managers and HR can reject leave." };
-      }
-
-      try {
-        const { error } = await supabase
-          .from("leave_requests")
-          .update({
-            status: "rejected",
-            reviewed_by: user?.id,
-            reviewed_at: new Date().toISOString(),
-          })
-          .eq("id", leaveId)
-          .eq("status", "pending");
-
-        if (error) throw error;
-
-        await queryClient.invalidateQueries({ queryKey: ["leave-requests"] });
-        
-        toast.success("Leave request rejected");
-        return { success: true, message: "Leave request rejected." };
-      } catch (error: any) {
-        const msg = error.message || "Failed to reject leave request";
-        toast.error(msg);
-        return { success: false, message: msg };
-      }
-    },
-    [user?.id, userRole, queryClient]
-  );
-
-  const createAnnouncement = useCallback(
-    async (title: string, content: string, priority: string = "normal"): Promise<ActionResult> => {
-      if (userRole !== "manager" && userRole !== "hr") {
-        return { success: false, message: "Unauthorized: Only managers and HR can create announcements." };
-      }
-
-      try {
-        const { data, error } = await supabase
-          .from("announcements")
-          .insert({
-            title,
-            content,
-            priority,
-            created_by: user?.id,
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-
-        await queryClient.invalidateQueries({ queryKey: ["announcements"] });
-        
-        toast.success("📢 Announcement created");
-        return { success: true, message: "Announcement published.", data };
-      } catch (error: any) {
-        const msg = error.message || "Failed to create announcement";
-        toast.error(msg);
-        return { success: false, message: msg };
-      }
-    },
-    [user?.id, userRole, queryClient]
-  );
+  const { navigateTo } = useAgentNavigator();
 
   /**
-   * Analyze leave request for conflicts and provide recommendation
+   * Execute a single action
    */
-  const analyzeLeaveRequest = useCallback(
-    async (leaveId: string): Promise<{ 
-      conflicts: string[]; 
-      recommendation: "approve" | "caution" | "reject";
-      reason: string;
-    }> => {
-      try {
-        // Get the leave request details
-        const { data: request } = await supabase
-          .from("leave_requests")
-          .select("*")
-          .eq("id", leaveId)
-          .single();
+  const executeAction = useCallback(async (action: AgentAction): Promise<ActionResult> => {
+    console.log("[AgentActions] Executing:", action.function, action.params);
 
-        if (!request) {
-          return { conflicts: [], recommendation: "caution", reason: "Leave request not found." };
+    try {
+      switch (action.function) {
+        // ========================
+        // LEAVE MANAGEMENT
+        // ========================
+        case "approve_leave": {
+          if (userRole !== "manager" && userRole !== "hr") {
+            return { success: false, message: "Unauthorized", function: action.function };
+          }
+          
+          const { error } = await supabase
+            .from("leave_requests")
+            .update({
+              status: "approved",
+              reviewed_by: user?.id,
+              reviewed_at: new Date().toISOString(),
+            })
+            .eq("id", action.params.leave_id)
+            .eq("status", "pending");
+
+          if (error) throw error;
+          
+          await queryClient.invalidateQueries({ queryKey: ["leave-requests"] });
+          toast.success("✅ Leave approved");
+          return { success: true, message: "Leave approved", function: action.function };
         }
 
-        // Check for overlapping approved leaves (same date range)
-        const { data: overlapping } = await supabase
-          .from("leave_requests")
-          .select("*, profiles!leave_requests_user_id_fkey(full_name)")
-          .eq("status", "approved")
-          .neq("user_id", request.user_id)
-          .or(`and(start_date.lte.${request.end_date},end_date.gte.${request.start_date})`);
+        case "reject_leave": {
+          if (userRole !== "manager" && userRole !== "hr") {
+            return { success: false, message: "Unauthorized", function: action.function };
+          }
 
-        const conflicts: string[] = [];
-        
-        if (overlapping && overlapping.length > 0) {
-          overlapping.forEach((leave: any) => {
-            const name = leave.profiles?.full_name || "Another employee";
-            conflicts.push(`${name} is off ${leave.start_date} to ${leave.end_date}`);
-          });
+          const { error } = await supabase
+            .from("leave_requests")
+            .update({
+              status: "rejected",
+              reviewed_by: user?.id,
+              reviewed_at: new Date().toISOString(),
+            })
+            .eq("id", action.params.leave_id)
+            .eq("status", "pending");
+
+          if (error) throw error;
+          
+          await queryClient.invalidateQueries({ queryKey: ["leave-requests"] });
+          toast.success("Leave rejected");
+          return { success: true, message: "Leave rejected", function: action.function };
         }
 
-        // Build recommendation
-        if (conflicts.length === 0) {
-          return {
-            conflicts: [],
-            recommendation: "approve",
-            reason: "No conflicts found. Recommend approving this request.",
-          };
-        } else if (conflicts.length <= 2) {
-          return {
-            conflicts,
-            recommendation: "caution",
-            reason: `${conflicts.length} team member(s) off during this period. Consider team coverage.`,
-          };
-        } else {
-          return {
-            conflicts,
-            recommendation: "reject",
-            reason: `${conflicts.length} team members already off. May impact productivity.`,
-          };
+        case "submit_leave": {
+          const { error } = await supabase
+            .from("leave_requests")
+            .insert({
+              user_id: user?.id,
+              leave_type: action.params.leave_type || "annual",
+              start_date: action.params.start_date,
+              end_date: action.params.end_date,
+              reason: action.params.reason || null,
+              status: "pending",
+            });
+
+          if (error) throw error;
+          
+          await queryClient.invalidateQueries({ queryKey: ["leave-requests"] });
+          toast.success("📝 Leave request submitted");
+          return { success: true, message: "Leave submitted", function: action.function };
         }
-      } catch (error) {
-        console.error("Error analyzing leave:", error);
-        return { conflicts: [], recommendation: "caution", reason: "Could not analyze conflicts." };
+
+        // ========================
+        // TASK MANAGEMENT
+        // ========================
+        case "update_task": {
+          const { error } = await supabase
+            .from("tasks")
+            .update({
+              status: action.params.status,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", action.params.task_id);
+
+          if (error) throw error;
+          
+          await queryClient.invalidateQueries({ queryKey: ["tasks"] });
+          toast.success(`Task ${action.params.status === "completed" ? "completed" : "updated"}`);
+          return { success: true, message: `Task updated to ${action.params.status}`, function: action.function };
+        }
+
+        case "create_task": {
+          const { error } = await supabase
+            .from("tasks")
+            .insert({
+              title: action.params.title,
+              description: action.params.description || null,
+              priority: action.params.priority || "medium",
+              assigned_to: action.params.assigned_to || user?.id,
+              created_by: user?.id,
+              status: "pending",
+            });
+
+          if (error) throw error;
+          
+          await queryClient.invalidateQueries({ queryKey: ["tasks"] });
+          toast.success("📋 Task created");
+          return { success: true, message: "Task created", function: action.function };
+        }
+
+        // ========================
+        // ANNOUNCEMENTS
+        // ========================
+        case "create_announcement": {
+          if (userRole !== "manager" && userRole !== "hr") {
+            return { success: false, message: "Unauthorized", function: action.function };
+          }
+
+          const { error } = await supabase
+            .from("announcements")
+            .insert({
+              title: action.params.title,
+              content: action.params.content,
+              priority: action.params.priority || "normal",
+              created_by: user?.id,
+            });
+
+          if (error) throw error;
+          
+          await queryClient.invalidateQueries({ queryKey: ["announcements"] });
+          toast.success("📢 Announcement published");
+          return { success: true, message: "Announcement created", function: action.function };
+        }
+
+        // ========================
+        // NAVIGATION
+        // ========================
+        case "navigate": {
+          const result = navigateTo(action.params.route as string);
+          if (result.success) {
+            toast.success(`Navigating to ${action.params.route}`);
+          }
+          return { ...result, function: action.function };
+        }
+
+        default:
+          return { success: false, message: `Unknown action: ${action.function}`, function: action.function };
       }
-    },
-    []
-  );
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Action failed";
+      console.error(`[AgentActions] Error executing ${action.function}:`, error);
+      toast.error(message);
+      return { success: false, message, function: action.function };
+    }
+  }, [user?.id, userRole, queryClient, navigateTo]);
+
+  /**
+   * Execute multiple actions in parallel
+   */
+  const executeActions = useCallback(async (actions: AgentAction[]): Promise<ActionResult[]> => {
+    if (actions.length === 0) return [];
+    
+    console.log(`[AgentActions] Executing ${actions.length} actions...`);
+    
+    const results = await Promise.all(
+      actions.map(action => executeAction(action))
+    );
+
+    // Log results
+    const successes = results.filter(r => r.success).length;
+    const failures = results.filter(r => !r.success).length;
+    console.log(`[AgentActions] Complete: ${successes} success, ${failures} failed`);
+
+    return results;
+  }, [executeAction]);
 
   return {
-    approveLeave,
-    rejectLeave,
-    createAnnouncement,
-    analyzeLeaveRequest,
+    parseActionsFromResponse,
+    executeAction,
+    executeActions,
     canExecuteActions: userRole === "manager" || userRole === "hr",
   };
 }

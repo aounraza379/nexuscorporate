@@ -4,14 +4,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTasks } from "./useTasks";
 import { usePolicies } from "./usePolicies";
 import { useLeaveRequests } from "./useLeaveRequests";
-import { useAgentActionParser, ParsedResponse } from "./useAgentActionParser";
+import { useAnnouncements } from "./useAnnouncements";
+import { useAgentActions, parseActionsFromResponse, ActionResult } from "./useAgentActions";
 
 interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
-  executedActions?: ParsedResponse["executedActions"];
+  executedActions?: ActionResult[];
 }
 
 interface UserContext {
@@ -43,6 +44,12 @@ interface UserContext {
     content: string;
     category: string | null;
   }>;
+  announcements?: Array<{
+    id: string;
+    title: string;
+    content: string;
+    priority: string | null;
+  }>;
   teamLeaveRequests?: Array<{
     id: string;
     user_id: string;
@@ -72,7 +79,8 @@ export function useNexusChat() {
   const { tasks } = useTasks();
   const { policies } = usePolicies();
   const { leaveRequests } = useLeaveRequests();
-  const { parseAndExecute } = useAgentActionParser();
+  const { announcements } = useAnnouncements();
+  const { executeActions } = useAgentActions();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isExecutingActions, setIsExecutingActions] = useState(false);
@@ -87,6 +95,16 @@ export function useNexusChat() {
         bio: profile.bio,
       } : undefined,
     };
+
+    // Add announcements for all roles
+    if (announcements && announcements.length > 0) {
+      context.announcements = announcements.map(a => ({
+        id: a.id,
+        title: a.title,
+        content: a.content,
+        priority: a.priority,
+      }));
+    }
 
     // Employee context - their own data
     if (userRole === "employee") {
@@ -110,7 +128,6 @@ export function useNexusChat() {
           reason: l.reason,
         }));
 
-      // All active policies for reference
       context.policies = policies?.map(p => ({
         id: p.id,
         title: p.title,
@@ -231,7 +248,7 @@ export function useNexusChat() {
     }
 
     return context;
-  }, [user, userRole, profile, tasks, policies, leaveRequests]);
+  }, [user, userRole, profile, tasks, policies, leaveRequests, announcements]);
 
   const sendMessage = async (content: string) => {
     if (!content.trim() || isLoading) return;
@@ -268,39 +285,46 @@ export function useNexusChat() {
 
       if (error) throw error;
 
-      // Parse AI response for actions and execute them
-      setIsExecutingActions(true);
-      const parsedResponse = await parseAndExecute(data.message);
-      setIsExecutingActions(false);
+      // Parse AI response for structured actions
+      const { displayMessage, actions } = parseActionsFromResponse(data.message);
+      
+      // Execute all actions
+      let executedActions: ActionResult[] = [];
+      if (actions.length > 0) {
+        setIsExecutingActions(true);
+        executedActions = await executeActions(actions);
+        setIsExecutingActions(false);
+      }
 
       // Create assistant message with cleaned content (no JSON visible)
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: parsedResponse.displayMessage || "Done.",
+        content: displayMessage || "Done.",
         timestamp: new Date(),
-        executedActions: parsedResponse.executedActions,
+        executedActions: executedActions.length > 0 ? executedActions : undefined,
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Chat error:", error);
       
       let errorContent = "I apologize, but I encountered an error. Please try again in a moment.";
       
-      if (error.message?.includes("429") || error.message?.includes("Rate limit")) {
+      const errorMessage = error instanceof Error ? error.message : "";
+      if (errorMessage.includes("429") || errorMessage.includes("Rate limit")) {
         errorContent = "I'm receiving too many requests right now. Please wait a moment and try again.";
-      } else if (error.message?.includes("402")) {
+      } else if (errorMessage.includes("402")) {
         errorContent = "The AI service is temporarily unavailable. Please try again later.";
       }
       
-      const errorMessage: ChatMessage = {
+      const errorMessageObj: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: errorContent,
         timestamp: new Date(),
       };
-      setMessages((prev) => [...prev, errorMessage]);
+      setMessages((prev) => [...prev, errorMessageObj]);
     } finally {
       setIsLoading(false);
       setIsExecutingActions(false);
