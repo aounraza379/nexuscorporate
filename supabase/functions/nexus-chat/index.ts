@@ -61,6 +61,12 @@ interface UserContext {
     priority: string | null;
     assigned_to: string | null;
   }>;
+  announcements?: Array<{
+    id: string;
+    title: string;
+    content: string;
+    priority: string | null;
+  }>;
 }
 
 interface RequestBody {
@@ -70,152 +76,239 @@ interface RequestBody {
   context: UserContext;
 }
 
-const CONCISE_STYLE = `
-RESPONSE STYLE:
-- ULTRA-CONCISE: Max 1-2 sentences. No fluff.
-- Execute first, confirm after.
-- Use bullets for lists.
-- No pleasantries.
-- NEVER output raw JSON to the user. Speak in natural language only.
-- When taking an action, just confirm it naturally: "Done. Leave approved." or "Navigating to Analytics."
+// ============================================================
+// FUNCTION CALLING SCHEMA - This is what the AI must output
+// ============================================================
+const FUNCTION_SCHEMA = `
+## AVAILABLE FUNCTIONS (you MUST use these for actions):
 
-Examples:
-- "Done. Leave approved for John."
-- "3 pending: John (sick, Feb 5-6), Sarah (annual, Feb 10-14). Want me to approve any?"
-- "Navigating to Analytics..."
-- "Task marked as completed."
+When the user asks you to DO something (not just query data), you MUST respond with:
+1. A natural language confirmation message for the user
+2. A JSON block wrapped in \`\`\`json ... \`\`\` tags containing the actions
+
+### Function Definitions:
+
+1. **approve_leave** - Approve a leave request
+   { "function": "approve_leave", "params": { "leave_id": "<uuid>" } }
+
+2. **reject_leave** - Reject a leave request  
+   { "function": "reject_leave", "params": { "leave_id": "<uuid>" } }
+
+3. **update_task** - Update a task's status
+   { "function": "update_task", "params": { "task_id": "<uuid>", "status": "pending|in_progress|completed" } }
+
+4. **create_task** - Create a new task
+   { "function": "create_task", "params": { "title": "<string>", "description": "<string>", "priority": "low|medium|high", "assigned_to": "<uuid|null>" } }
+
+5. **create_announcement** - Create an announcement (manager/hr only)
+   { "function": "create_announcement", "params": { "title": "<string>", "content": "<string>", "priority": "low|normal|high" } }
+
+6. **navigate** - Navigate to a page
+   { "function": "navigate", "params": { "route": "dashboard|tasks|leave|analytics|announcements|team|employees|settings|policies|salary|wellness|payroll" } }
+
+7. **submit_leave** - Submit a leave request (employee only)
+   { "function": "submit_leave", "params": { "leave_type": "annual|sick|personal|other", "start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD", "reason": "<string>" } }
+
+### RESPONSE FORMAT:
+
+Your response MUST follow this exact structure:
+\`\`\`
+<Natural language message to user - concise, friendly>
+
+\`\`\`json
+{
+  "actions": [
+    { "function": "function_name", "params": { ... } }
+  ]
+}
+\`\`\`
+\`\`\`
+
+### EXAMPLES:
+
+User: "Approve John's leave request"
+Response:
+Done! Approved John's sick leave for Feb 5-6.
+
+\`\`\`json
+{
+  "actions": [
+    { "function": "approve_leave", "params": { "leave_id": "abc12345-1234-1234-1234-123456789012" } }
+  ]
+}
+\`\`\`
+
+User: "Reject all pending leaves"
+Response:
+Rejected 3 pending leave requests.
+
+\`\`\`json
+{
+  "actions": [
+    { "function": "reject_leave", "params": { "leave_id": "id1" } },
+    { "function": "reject_leave", "params": { "leave_id": "id2" } },
+    { "function": "reject_leave", "params": { "leave_id": "id3" } }
+  ]
+}
+\`\`\`
+
+User: "Show me analytics"
+Response:
+Opening Analytics...
+
+\`\`\`json
+{
+  "actions": [
+    { "function": "navigate", "params": { "route": "analytics" } }
+  ]
+}
+\`\`\`
+
+User: "Create a high priority task for reviewing Q1 reports"
+Response:
+Created a new high-priority task for reviewing Q1 reports.
+
+\`\`\`json
+{
+  "actions": [
+    { "function": "create_task", "params": { "title": "Review Q1 Reports", "description": "Review and summarize Q1 financial reports", "priority": "high", "assigned_to": null } }
+  ]
+}
+\`\`\`
+
+User: "Mark my task as completed" (when they have 1 pending task)
+Response:
+Marked "Prepare presentation" as completed.
+
+\`\`\`json
+{
+  "actions": [
+    { "function": "update_task", "params": { "task_id": "task-uuid-here", "status": "completed" } }
+  ]
+}
+\`\`\`
+
+### IMPORTANT RULES:
+- ALWAYS include the JSON block when taking an action
+- Use EXACT UUIDs from the context data
+- If multiple actions needed, include ALL in the actions array
+- For queries (no action needed), just respond naturally WITHOUT the JSON block
+- Keep natural language responses ULTRA SHORT (1-2 sentences max)
 `;
 
-const DECISION_SUPPORT_PROMPT = `
-DECISION SUPPORT:
-For pending leave requests, provide instant recommendations:
-1. Check date conflicts with approved leaves
-2. Assess team coverage
-3. Give clear verdict: "✅ Approve" or "⚠️ Caution: [reason]"
+const CORE_RULES = `
+NEXUS AI - STRICT OPERATING RULES:
+
+1. ONLY handle company/work matters. Off-topic = "I only handle company matters."
+2. Use EXACT data from context - never make up IDs or names
+3. Be ULTRA-CONCISE: 1-2 sentences max
+4. For actions, ALWAYS include the JSON function block
+5. For queries, respond naturally without JSON
+6. Reference specific data when answering questions
+7. Be proactive - suggest next actions after completing requests
 `;
-
-const ACTION_EXECUTION_PROMPT = `
-ACTION EXECUTION:
-When the user asks you to perform an action, DO IT and confirm naturally:
-
-LEAVE ACTIONS:
-- "approve John's leave" → Execute approval, respond: "Done. Approved John's leave (sick, Feb 5-6)."
-- "reject this request" → Execute rejection, respond: "Done. Leave request rejected."
-- INCLUDE the leave ID in your response so the system can execute: "Approved leave ID:abc12345"
-
-NAVIGATION:
-- "show analytics" → Respond: "Opening Analytics..." (system handles navigation)
-- "go to tasks" → Respond: "Navigating to Tasks..."
-
-ANNOUNCEMENTS:
-- "post announcement about..." → Create it, respond: "Done. Announcement published."
-
-TASKS:
-- "mark task as done" → Update it, respond: "Done. Task completed."
-
-CRITICAL: Always include IDs when confirming actions so the system can execute them.
-Example: "Approved leave ID:abc12345 for John Smith."
-`;
-
-const STRICT_BOUNDARY_PROMPT = `
-NEXUS AI AGENT - CORE RULES:
-1. You are an ultra-concise HR assistant that EXECUTES actions.
-2. ONLY handle company matters. Off-topic: "I only handle company matters."
-3. Reference SPECIFIC data from context.
-4. Be proactive: suggest actions after showing data.
-5. NEVER output JSON blocks. Always speak naturally.
-
-${CONCISE_STYLE}
-`;
-
 
 function buildEmployeeSystemPrompt(context: UserContext): string {
-  let prompt = `${STRICT_BOUNDARY_PROMPT}
+  let prompt = `${CORE_RULES}\n\n${FUNCTION_SCHEMA}\n\n`;
+  prompt += `EMPLOYEE: ${context.profile?.full_name || "User"} | ${context.profile?.department || "No Dept"}\n\n`;
 
-NEXUS for ${context.profile?.full_name || "Employee"} | ${context.profile?.department || "Dept N/A"}
-
-YOUR TASKS:
-`;
+  prompt += `AVAILABLE FUNCTIONS FOR EMPLOYEE:\n- navigate (all pages except payroll/admin)\n- update_task (own tasks only)\n- submit_leave\n\n`;
 
   if (context.tasks && context.tasks.length > 0) {
-    const pending = context.tasks.filter(t => t.status === "pending").length;
-    const inProgress = context.tasks.filter(t => t.status === "in_progress").length;
-    prompt += `${context.tasks.length} total (${pending} pending, ${inProgress} in-progress)\n`;
-    prompt += context.tasks.slice(0, 10).map(t => `• [${t.status}] ${t.title} (${t.priority})`).join("\n");
+    prompt += `YOUR TASKS (${context.tasks.length}):\n`;
+    context.tasks.forEach(t => {
+      prompt += `• ID:${t.id} | "${t.title}" | ${t.status} | ${t.priority} priority${t.due_date ? ` | Due: ${t.due_date}` : ""}\n`;
+    });
   } else {
-    prompt += "No tasks assigned.\n";
+    prompt += "YOUR TASKS: None assigned\n";
   }
 
   if (context.leaveRequests && context.leaveRequests.length > 0) {
-    prompt += `\n\nYOUR LEAVE HISTORY:\n`;
-    prompt += context.leaveRequests.map(l => `• ${l.leave_type} (${l.start_date} to ${l.end_date}) - ${l.status}`).join("\n");
+    prompt += `\nYOUR LEAVE REQUESTS:\n`;
+    context.leaveRequests.forEach(l => {
+      prompt += `• ID:${l.id} | ${l.leave_type} | ${l.start_date} to ${l.end_date} | ${l.status}\n`;
+    });
+  }
+
+  if (context.announcements && context.announcements.length > 0) {
+    prompt += `\nANNOUNCEMENTS:\n`;
+    context.announcements.slice(0, 5).forEach(a => {
+      prompt += `• "${a.title}": ${a.content.substring(0, 100)}...\n`;
+    });
   }
 
   if (context.policies && context.policies.length > 0) {
-    prompt += `\n\nPOLICIES:\n`;
-    prompt += context.policies.map(p => `### ${p.title}\n${p.content.substring(0, 300)}...`).join("\n\n");
+    prompt += `\nCOMPANY POLICIES:\n`;
+    context.policies.forEach(p => {
+      prompt += `• ${p.title} (${p.category || "General"})\n`;
+    });
   }
 
   return prompt;
 }
 
 function buildManagerSystemPrompt(context: UserContext): string {
-  let prompt = `${STRICT_BOUNDARY_PROMPT}
-${DECISION_SUPPORT_PROMPT}
-${ACTION_EXECUTION_PROMPT}
+  let prompt = `${CORE_RULES}\n\n${FUNCTION_SCHEMA}\n\n`;
+  prompt += `MANAGER: ${context.profile?.full_name || "Manager"} | ${context.profile?.department || ""}\n\n`;
 
-NEXUS for Manager ${context.profile?.full_name || ""} | ${context.profile?.department || ""}
+  prompt += `AVAILABLE FUNCTIONS FOR MANAGER:\n- approve_leave, reject_leave\n- update_task, create_task\n- create_announcement\n- navigate (all pages)\n\n`;
 
-`;
-
-  // Pending leave requests - this is the priority
-  if (context.teamLeaveRequests && context.teamLeaveRequests.length > 0) {
+  // Pending leaves are the priority for managers
+  if (context.teamLeaveRequests) {
     const pending = context.teamLeaveRequests.filter(l => l.status === "pending");
-    
-    prompt += `⚠️ PENDING LEAVE APPROVALS: ${pending.length}\n`;
-    prompt += pending.map(l => {
-      const name = l.employee_name || `User ${l.user_id.substring(0, 6)}`;
-      return `• ID:${l.id.substring(0, 8)} | ${name} | ${l.leave_type} | ${l.start_date} to ${l.end_date}${l.reason ? ` | "${l.reason}"` : ""}`;
-    }).join("\n");
+    if (pending.length > 0) {
+      prompt += `⚠️ PENDING LEAVE APPROVALS (${pending.length}):\n`;
+      pending.forEach(l => {
+        prompt += `• ID:${l.id} | ${l.employee_name || "Employee"} | ${l.leave_type} | ${l.start_date} to ${l.end_date}${l.reason ? ` | Reason: "${l.reason}"` : ""}\n`;
+      });
+      prompt += "\n";
+    }
 
-    // Check for conflicts between pending and approved
     const approved = context.teamLeaveRequests.filter(l => l.status === "approved");
     if (approved.length > 0) {
-      prompt += `\n\nAPPROVED LEAVES (for conflict check):\n`;
-      prompt += approved.slice(0, 5).map(l => `• ${l.employee_name || l.user_id.substring(0, 6)}: ${l.start_date} to ${l.end_date}`).join("\n");
+      prompt += `APPROVED LEAVES (${approved.length}):\n`;
+      approved.slice(0, 5).forEach(l => {
+        prompt += `• ${l.employee_name || "Employee"}: ${l.start_date} to ${l.end_date}\n`;
+      });
+      prompt += "\n";
     }
   }
 
-  // Team task summary
   if (context.teamTasks && context.teamTasks.length > 0) {
-    const stats = {
-      total: context.teamTasks.length,
-      pending: context.teamTasks.filter(t => t.status === "pending").length,
-      inProgress: context.teamTasks.filter(t => t.status === "in_progress").length,
-      high: context.teamTasks.filter(t => t.priority === "high").length,
-    };
-    prompt += `\n\nTEAM TASKS: ${stats.total} total, ${stats.pending} pending, ${stats.inProgress} in-progress, ${stats.high} high-priority`;
+    const pending = context.teamTasks.filter(t => t.status === "pending").length;
+    const inProgress = context.teamTasks.filter(t => t.status === "in_progress").length;
+    const highPriority = context.teamTasks.filter(t => t.priority === "high").length;
+    
+    prompt += `TEAM TASKS: ${context.teamTasks.length} total | ${pending} pending | ${inProgress} in-progress | ${highPriority} high-priority\n`;
+    prompt += "Recent tasks:\n";
+    context.teamTasks.slice(0, 8).forEach(t => {
+      prompt += `• ID:${t.id} | "${t.title}" | ${t.status} | ${t.priority}\n`;
+    });
+    prompt += "\n";
   }
 
-  // Policies reference
+  if (context.announcements && context.announcements.length > 0) {
+    prompt += `RECENT ANNOUNCEMENTS:\n`;
+    context.announcements.slice(0, 3).forEach(a => {
+      prompt += `• "${a.title}"\n`;
+    });
+    prompt += "\n";
+  }
+
   if (context.policies && context.policies.length > 0) {
-    prompt += `\n\nPOLICY REFERENCE:\n`;
-    prompt += context.policies.slice(0, 5).map(p => `• ${p.title}`).join("\n");
+    prompt += `POLICIES: ${context.policies.map(p => p.title).join(", ")}\n`;
   }
 
   return prompt;
 }
 
 function buildHRSystemPrompt(context: UserContext): string {
-  let prompt = `${STRICT_BOUNDARY_PROMPT}
-${DECISION_SUPPORT_PROMPT}
-${ACTION_EXECUTION_PROMPT}
+  let prompt = `${CORE_RULES}\n\n${FUNCTION_SCHEMA}\n\n`;
+  prompt += `HR ADMIN: ${context.profile?.full_name || "HR"}\n\n`;
 
-NEXUS for HR Admin ${context.profile?.full_name || ""}
+  prompt += `AVAILABLE FUNCTIONS FOR HR (FULL ACCESS):\n- approve_leave, reject_leave\n- update_task, create_task\n- create_announcement\n- navigate (all pages including payroll)\n\n`;
 
-`;
-
-  // Employee overview
+  // Org overview
   if (context.allEmployees && context.allEmployees.length > 0) {
     const deptCounts = context.allEmployees.reduce((acc, emp) => {
       const dept = emp.department || "Unassigned";
@@ -223,29 +316,55 @@ NEXUS for HR Admin ${context.profile?.full_name || ""}
       return acc;
     }, {} as Record<string, number>);
 
-    prompt += `HEADCOUNT: ${context.allEmployees.length}\n`;
-    prompt += Object.entries(deptCounts).map(([d, c]) => `• ${d}: ${c}`).join("\n");
+    prompt += `ORGANIZATION (${context.allEmployees.length} employees):\n`;
+    Object.entries(deptCounts).forEach(([dept, count]) => {
+      prompt += `• ${dept}: ${count}\n`;
+    });
+    prompt += "\n";
+
+    prompt += `EMPLOYEE DIRECTORY:\n`;
+    context.allEmployees.slice(0, 15).forEach(e => {
+      prompt += `• ID:${e.id} | ${e.full_name || "Unnamed"} | ${e.department || "No Dept"}\n`;
+    });
+    prompt += "\n";
   }
 
-  // Leave requests
-  if (context.teamLeaveRequests && context.teamLeaveRequests.length > 0) {
+  // All pending leaves
+  if (context.teamLeaveRequests) {
     const pending = context.teamLeaveRequests.filter(l => l.status === "pending");
-    prompt += `\n\n⚠️ PENDING LEAVES: ${pending.length}\n`;
-    prompt += pending.slice(0, 10).map(l => {
-      const name = l.employee_name || `User ${l.user_id.substring(0, 6)}`;
-      return `• ID:${l.id.substring(0, 8)} | ${name} | ${l.leave_type} | ${l.start_date} to ${l.end_date}`;
-    }).join("\n");
+    if (pending.length > 0) {
+      prompt += `⚠️ PENDING LEAVE APPROVALS (${pending.length}):\n`;
+      pending.forEach(l => {
+        prompt += `• ID:${l.id} | ${l.employee_name || "Employee"} | ${l.leave_type} | ${l.start_date} to ${l.end_date}\n`;
+      });
+      prompt += "\n";
+    }
   }
 
-  // Task metrics
+  // All tasks
   if (context.teamTasks && context.teamTasks.length > 0) {
-    prompt += `\n\nORG TASKS: ${context.teamTasks.length} total, ${context.teamTasks.filter(t => t.priority === "high").length} high-priority`;
+    prompt += `ORG TASKS: ${context.teamTasks.length} total\n`;
+    context.teamTasks.slice(0, 10).forEach(t => {
+      prompt += `• ID:${t.id} | "${t.title}" | ${t.status} | ${t.priority}\n`;
+    });
+    prompt += "\n";
+  }
+
+  // Announcements
+  if (context.announcements && context.announcements.length > 0) {
+    prompt += `ANNOUNCEMENTS:\n`;
+    context.announcements.slice(0, 5).forEach(a => {
+      prompt += `• ID:${a.id} | "${a.title}" | ${a.priority || "normal"} priority\n`;
+    });
+    prompt += "\n";
   }
 
   // Policies
   if (context.policies && context.policies.length > 0) {
-    prompt += `\n\nPOLICIES: ${context.policies.length} active\n`;
-    prompt += context.policies.slice(0, 5).map(p => `• ${p.title}`).join("\n");
+    prompt += `POLICIES (${context.policies.length}):\n`;
+    context.policies.forEach(p => {
+      prompt += `• ID:${p.id} | ${p.title} | ${p.category || "General"}\n`;
+    });
   }
 
   return prompt;
@@ -291,8 +410,8 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
         messages: allMessages,
-        max_tokens: 500, // Shorter for concise responses
-        temperature: 0.3, // Lower for consistent, factual responses
+        max_tokens: 800,
+        temperature: 0.2, // Lower for more consistent structured output
       }),
     });
 
