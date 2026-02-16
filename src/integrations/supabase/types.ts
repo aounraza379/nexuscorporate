@@ -44,6 +44,33 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_logs: {
+        Row: {
+          action_type: string
+          created_at: string
+          id: string
+          metadata: Json | null
+          performed_by: string
+          target_user_id: string | null
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          performed_by: string
+          target_user_id?: string | null
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          performed_by?: string
+          target_user_id?: string | null
+        }
+        Relationships: []
+      }
       company_policies: {
         Row: {
           category: string | null
@@ -125,8 +152,12 @@ export type Database = {
           bio: string | null
           created_at: string | null
           department: string | null
+          email: string | null
+          employment_status: string
           full_name: string | null
           id: string
+          join_date: string | null
+          reporting_manager: string | null
           salary_info: Json | null
           updated_at: string | null
         }
@@ -135,8 +166,12 @@ export type Database = {
           bio?: string | null
           created_at?: string | null
           department?: string | null
+          email?: string | null
+          employment_status?: string
           full_name?: string | null
           id: string
+          join_date?: string | null
+          reporting_manager?: string | null
           salary_info?: Json | null
           updated_at?: string | null
         }
@@ -145,12 +180,24 @@ export type Database = {
           bio?: string | null
           created_at?: string | null
           department?: string | null
+          email?: string | null
+          employment_status?: string
           full_name?: string | null
           id?: string
+          join_date?: string | null
+          reporting_manager?: string | null
           salary_info?: Json | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_reporting_manager_fkey"
+            columns: ["reporting_manager"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tasks: {
         Row: {
@@ -220,6 +267,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_view_salary: { Args: { _user_id: string }; Returns: boolean }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
