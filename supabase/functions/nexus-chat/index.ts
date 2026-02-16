@@ -17,6 +17,15 @@ interface UserContext {
     department: string | null;
     bio: string | null;
   };
+  benefits?: {
+    insurance_tier: string;
+    total_limit: number;
+    amount_spent: number;
+    coverage_details: Record<string, any>;
+    dependents: Array<Record<string, any>>;
+    plan_start_date: string;
+    plan_end_date: string | null;
+  };
   tasks?: Array<{
     id: string;
     title: string;
@@ -207,6 +216,12 @@ NEXUS AI - STRICT OPERATING RULES:
 6. Reference specific data when answering questions
 7. Be proactive - suggest next actions after completing requests
 8. TODAY'S DATE: Use this as reference for relative dates like "tomorrow", "next week", etc. ALWAYS calculate dates correctly based on today.
+
+## BENEFITS & INSURANCE RULES:
+- When answering benefits questions, ONLY use the employee's actual benefits data provided in context.
+- If specific coverage info is missing from the data, respond: "Please contact HR for specific policy documents."
+- Never make up coverage amounts, limits, or policy details.
+- You can help interpret the coverage_details JSON and dependents list.
 `;
 
 function buildEmployeeSystemPrompt(context: UserContext): string {
@@ -214,6 +229,29 @@ function buildEmployeeSystemPrompt(context: UserContext): string {
   prompt += `EMPLOYEE: ${context.profile?.full_name || "User"} | ${context.profile?.department || "No Dept"}\n\n`;
 
   prompt += `AVAILABLE FUNCTIONS FOR EMPLOYEE:\n- navigate (all pages except payroll/admin)\n- update_task (own tasks only)\n- submit_leave\n\n`;
+
+  // Benefits & Insurance data
+  if (context.benefits) {
+    const b = context.benefits;
+    prompt += `YOUR BENEFITS & INSURANCE:\n`;
+    prompt += `• Tier: ${b.insurance_tier}\n`;
+    prompt += `• Total Limit: ₹${b.total_limit.toLocaleString()}\n`;
+    prompt += `• Amount Spent: ₹${b.amount_spent.toLocaleString()}\n`;
+    prompt += `• Remaining: ₹${(b.total_limit - b.amount_spent).toLocaleString()}\n`;
+    prompt += `• Plan Period: ${b.plan_start_date}${b.plan_end_date ? ` to ${b.plan_end_date}` : " (ongoing)"}\n`;
+    if (b.coverage_details && Object.keys(b.coverage_details).length > 0) {
+      prompt += `• Coverage Details: ${JSON.stringify(b.coverage_details)}\n`;
+    }
+    if (b.dependents && b.dependents.length > 0) {
+      prompt += `• Dependents (${b.dependents.length}): ${JSON.stringify(b.dependents)}\n`;
+    } else {
+      prompt += `• Dependents: None registered\n`;
+    }
+    prompt += "\n";
+  } else {
+    prompt += "YOUR BENEFITS: No plan assigned. Contact HR for enrollment.\n\n";
+  }
+
 
   if (context.tasks && context.tasks.length > 0) {
     prompt += `YOUR TASKS (${context.tasks.length}):\n`;

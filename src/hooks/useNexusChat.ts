@@ -22,6 +22,15 @@ interface UserContext {
     department: string | null;
     bio: string | null;
   };
+  benefits?: {
+    insurance_tier: string;
+    total_limit: number;
+    amount_spent: number;
+    coverage_details: Record<string, any>;
+    dependents: Array<Record<string, any>>;
+    plan_start_date: string;
+    plan_end_date: string | null;
+  };
   tasks?: Array<{
     id: string;
     title: string;
@@ -95,6 +104,30 @@ export function useNexusChat() {
         bio: profile.bio,
       } : undefined,
     };
+
+    // Fetch employee benefits
+    if (user?.id) {
+      try {
+        const { data: benefitsData } = await supabase
+          .from("employee_benefits")
+          .select("*")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (benefitsData) {
+          context.benefits = {
+            insurance_tier: benefitsData.insurance_tier,
+            total_limit: Number(benefitsData.total_limit),
+            amount_spent: Number(benefitsData.amount_spent),
+            coverage_details: benefitsData.coverage_details as Record<string, any>,
+            dependents: benefitsData.dependents as Array<Record<string, any>>,
+            plan_start_date: benefitsData.plan_start_date,
+            plan_end_date: benefitsData.plan_end_date,
+          };
+        }
+      } catch (e) {
+        console.error("Error fetching benefits:", e);
+      }
+    }
 
     // Add announcements for all roles
     if (announcements && announcements.length > 0) {

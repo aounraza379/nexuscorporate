@@ -18,6 +18,7 @@ import {
   Loader2,
   Zap,
 } from "lucide-react";
+import { MyBenefitsCard } from "@/components/dashboard/MyBenefitsCard";
 
 const iconMap: Record<string, any> = {
   "Pending Tasks": ListTodo,
@@ -80,6 +81,13 @@ export default function DashboardHome() {
           );
         })}
       </div>
+
+      {/* My Benefits - Employee view */}
+      {userRole === "employee" && (
+        <motion.div variants={itemVariants}>
+          <MyBenefitsCard />
+        </motion.div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* AI Smart Insights */}
