@@ -12,18 +12,21 @@ interface LiveSyncIndicatorProps {
  */
 export function LiveSyncIndicator({ isSyncing, isConnected = true }: LiveSyncIndicatorProps) {
   return (
-    <AnimatePresence>
-      {isSyncing && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 rounded-full bg-primary/90 text-primary-foreground text-sm font-medium shadow-lg backdrop-blur-sm"
-        >
-          <Loader2 className="w-4 h-4 animate-spin" />
-          <span>Live Syncing...</span>
-        </motion.div>
-      )}
+    <>
+      <AnimatePresence>
+        {isSyncing && (
+          <motion.div
+            key="sync-indicator"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 rounded-full bg-primary/90 text-primary-foreground text-sm font-medium shadow-lg backdrop-blur-sm"
+          >
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>Live Syncing...</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
       
       {/* Connection status dot */}
       <div className="fixed bottom-4 right-4 z-40">
@@ -43,6 +46,6 @@ export function LiveSyncIndicator({ isSyncing, isConnected = true }: LiveSyncInd
           <span>{isConnected ? "Live" : "Offline"}</span>
         </motion.div>
       </div>
-    </AnimatePresence>
+    </>
   );
 }

@@ -206,6 +206,7 @@ NEXUS AI - STRICT OPERATING RULES:
 5. For queries, respond naturally without JSON
 6. Reference specific data when answering questions
 7. Be proactive - suggest next actions after completing requests
+8. TODAY'S DATE: Use this as reference for relative dates like "tomorrow", "next week", etc. ALWAYS calculate dates correctly based on today.
 `;
 
 function buildEmployeeSystemPrompt(context: UserContext): string {
@@ -386,6 +387,10 @@ Deno.serve(async (req) => {
     // Build role-specific system prompt
     let systemPrompt = "";
     
+    // Inject today's date so the AI can resolve relative dates like "tomorrow"
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    
     if (userRole === "employee") {
       systemPrompt = buildEmployeeSystemPrompt(context);
     } else if (userRole === "manager") {
@@ -393,6 +398,9 @@ Deno.serve(async (req) => {
     } else if (userRole === "hr") {
       systemPrompt = buildHRSystemPrompt(context);
     }
+    
+    // Prepend today's date to the system prompt
+    systemPrompt = `TODAY'S DATE: ${todayStr}\n\n` + systemPrompt;
 
     console.log(`[NEXUS] ${userRole} query from ${userId}`);
 
