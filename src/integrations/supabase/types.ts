@@ -104,6 +104,48 @@ export type Database = {
         }
         Relationships: []
       }
+      employee_benefits: {
+        Row: {
+          amount_spent: number
+          coverage_details: Json
+          created_at: string
+          dependents: Json
+          id: string
+          insurance_tier: string
+          plan_end_date: string | null
+          plan_start_date: string
+          total_limit: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount_spent?: number
+          coverage_details?: Json
+          created_at?: string
+          dependents?: Json
+          id?: string
+          insurance_tier?: string
+          plan_end_date?: string | null
+          plan_start_date?: string
+          total_limit?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount_spent?: number
+          coverage_details?: Json
+          created_at?: string
+          dependents?: Json
+          id?: string
+          insurance_tier?: string
+          plan_end_date?: string | null
+          plan_start_date?: string
+          total_limit?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       leave_requests: {
         Row: {
           created_at: string
