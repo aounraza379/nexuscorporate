@@ -16,16 +16,18 @@ export function useVoiceCommands({ onCommand, onInterimTranscript, enabled = tru
   const recognitionRef = useRef<any>(null);
   const isListeningRef = useRef(false);
 
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    setIsSupported(!!SpeechRecognition);
+  }, []);
+
   const initRecognition = useCallback(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setIsSupported(false);
-      return null;
-    }
-    setIsSupported(true);
+    if (!SpeechRecognition) return null;
 
     const recognition = new SpeechRecognition();
-    recognition.continuous = true;
+    // Single utterance mode — stops automatically after user finishes speaking
+    recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = "en-US";
 
@@ -48,62 +50,54 @@ export function useVoiceCommands({ onCommand, onInterimTranscript, enabled = tru
       }
 
       if (finalTranscript) {
-        setTranscript(finalTranscript);
-        onCommand(finalTranscript.trim());
+        const command = finalTranscript.trim();
+        setTranscript("");
+        // Stop listening state immediately on final result
+        isListeningRef.current = false;
+        setIsListening(false);
+        // Fire command
+        onCommand(command);
       }
     };
 
     recognition.onend = () => {
-      if (isListeningRef.current) {
-        // Auto-restart on silence timeout
-        try {
-          recognition.start();
-        } catch (e) {
-          console.error("Failed to restart recognition:", e);
-          isListeningRef.current = false;
-          setIsListening(false);
-        }
-      } else {
-        setIsListening(false);
-      }
+      // Always stop — single utterance mode, no auto-restart
+      isListeningRef.current = false;
+      setIsListening(false);
+      setTranscript("");
     };
 
     recognition.onerror = (event: any) => {
       console.error("Speech recognition error:", event.error);
       if (event.error === "not-allowed") {
         toast.error("Microphone access denied. Please allow microphone permissions.");
-        isListeningRef.current = false;
-        setIsListening(false);
       } else if (event.error === "no-speech") {
-        // Normal silence timeout — will auto-restart via onend
+        // Silence timeout — just stop gracefully
       } else if (event.error !== "aborted") {
         toast.error("Voice recognition error. Please try again.");
-        isListeningRef.current = false;
-        setIsListening(false);
       }
+      isListeningRef.current = false;
+      setIsListening(false);
+      setTranscript("");
     };
 
     return recognition;
   }, [onCommand, onInterimTranscript]);
 
-  useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    setIsSupported(!!SpeechRecognition);
-  }, []);
-
   const startListening = useCallback(() => {
     if (!enabled) return;
 
-    if (!recognitionRef.current) {
-      recognitionRef.current = initRecognition();
-    }
-    if (!recognitionRef.current) return;
+    // Re-create each time to avoid stale state issues
+    recognitionRef.current?.abort();
+    const recognition = initRecognition();
+    if (!recognition) return;
+    recognitionRef.current = recognition;
 
     try {
       setTranscript("");
       isListeningRef.current = true;
       setIsListening(true);
-      recognitionRef.current.start();
+      recognition.start();
     } catch (error) {
       console.error("Failed to start recognition:", error);
       isListeningRef.current = false;
@@ -115,7 +109,7 @@ export function useVoiceCommands({ onCommand, onInterimTranscript, enabled = tru
     isListeningRef.current = false;
     setIsListening(false);
     setTranscript("");
-    recognitionRef.current?.stop();
+    recognitionRef.current?.abort();
   }, []);
 
   const toggleListening = useCallback(() => {
@@ -129,7 +123,7 @@ export function useVoiceCommands({ onCommand, onInterimTranscript, enabled = tru
   useEffect(() => {
     return () => {
       isListeningRef.current = false;
-      recognitionRef.current?.stop();
+      recognitionRef.current?.abort();
     };
   }, []);
 
@@ -147,45 +141,19 @@ export function useVoiceCommands({ onCommand, onInterimTranscript, enabled = tru
 }
 
 function getCommandHints(role: string | null): string[] {
-  const common = [
-    "Show my tasks",
-    "Go to dashboard",
-    "Open announcements",
-  ];
-
+  const common = ["Show my tasks", "Go to dashboard", "Open announcements"];
   switch (role) {
     case "employee":
-      return [
-        ...common,
-        "Request leave",
-        "Check my wellness",
-        "View policies",
-        "What are my pending tasks?",
-      ];
+      return [...common, "Request leave", "Check my wellness", "View policies", "What are my pending tasks?"];
     case "manager":
-      return [
-        ...common,
-        "Approve all pending leaves",
-        "Show team overview",
-        "Create a new task",
-        "Show analytics",
-        "Who has burnout risk?",
-      ];
+      return [...common, "Approve all pending leaves", "Show team overview", "Create a new task", "Show analytics", "Who has burnout risk?"];
     case "hr":
-      return [
-        ...common,
-        "Show employee list",
-        "Open payroll",
-        "Create announcement",
-        "Show all pending leaves",
-        "How many employees do we have?",
-      ];
+      return [...common, "Show employee list", "Open payroll", "Create announcement", "Show all pending leaves", "How many employees do we have?"];
     default:
       return common;
   }
 }
 
-// Augment Window for TypeScript
 declare global {
   interface Window {
     SpeechRecognition: any;
