@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import { exportToCsv } from "@/lib/exportCsv";
 import {
   Wallet,
   Users,
@@ -79,7 +80,22 @@ export default function PayrollPage() {
             Manage employee salaries and generate payroll reports
           </p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={() => {
+          if (!profiles?.length) return;
+          exportToCsv("payroll-report", profiles.map((p, i) => {
+            const baseSalary = 3000 + (i * 200);
+            const allowances = 500;
+            const deductions = Math.round(baseSalary * 0.2);
+            return {
+              Employee: p.full_name || "Unknown",
+              Department: p.department || "Unassigned",
+              "Base Salary": baseSalary,
+              Allowances: allowances,
+              Deductions: deductions,
+              "Net Pay": baseSalary + allowances - deductions,
+            };
+          }));
+        }}>
           <FileSpreadsheet className="w-4 h-4" />
           Export Report
         </Button>
@@ -167,7 +183,22 @@ export default function PayrollPage() {
                 <SelectItem value="december-2025">December 2025</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline" className="gap-2">
+            <Button variant="outline" className="gap-2" onClick={() => {
+              if (!filteredProfiles?.length) return;
+              exportToCsv("payroll-filtered", filteredProfiles.map((p, i) => {
+                const baseSalary = 3000 + (i * 200);
+                const allowances = 500;
+                const deductions = Math.round(baseSalary * 0.2);
+                return {
+                  Employee: p.full_name || "Unknown",
+                  Department: p.department || "Unassigned",
+                  "Base Salary": baseSalary,
+                  Allowances: allowances,
+                  Deductions: deductions,
+                  "Net Pay": baseSalary + allowances - deductions,
+                };
+              }));
+            }}>
               <Download className="w-4 h-4" />
               Download All
             </Button>
