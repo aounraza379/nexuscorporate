@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { GlassCard } from "@/components/GlassCard";
+import { AddEmployeeDialog } from "@/components/AddEmployeeDialog";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -23,8 +25,10 @@ import {
 } from "lucide-react";
 
 export default function EmployeesPage() {
+  const { userRole } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("all");
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
 
   const { data: employees, isLoading } = useQuery({
     queryKey: ["all-employees"],
@@ -107,10 +111,12 @@ export default function EmployeesPage() {
             <Download className="w-4 h-4" />
             Export
           </Button>
-          <Button className="gap-2">
-            <UserPlus className="w-4 h-4" />
-            Add Employee
-          </Button>
+          {userRole === "hr" && (
+            <Button className="gap-2" onClick={() => setAddDialogOpen(true)}>
+              <UserPlus className="w-4 h-4" />
+              Add Employee
+            </Button>
+          )}
         </div>
       </div>
 
@@ -280,6 +286,8 @@ export default function EmployeesPage() {
           </p>
         </GlassCard>
       )}
+
+      <AddEmployeeDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} />
     </motion.div>
   );
 }
