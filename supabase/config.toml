@@ -2,3 +2,6 @@ project_id = "euqsxgfdororyuvsjhem"
 
 [functions.leave-impact-analysis]
 verify_jwt = false
+
+[functions.summarize-announcement]
+verify_jwt = false

@@ -21,7 +21,9 @@ export type Database = {
           created_by: string | null
           expires_at: string | null
           id: string
+          is_mandatory: boolean
           priority: string | null
+          read_by: string[]
           title: string
         }
         Insert: {
@@ -30,7 +32,9 @@ export type Database = {
           created_by?: string | null
           expires_at?: string | null
           id?: string
+          is_mandatory?: boolean
           priority?: string | null
+          read_by?: string[]
           title: string
         }
         Update: {
@@ -39,7 +43,9 @@ export type Database = {
           created_by?: string | null
           expires_at?: string | null
           id?: string
+          is_mandatory?: boolean
           priority?: string | null
+          read_by?: string[]
           title?: string
         }
         Relationships: []
@@ -350,6 +356,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      mark_announcement_read: {
+        Args: { _announcement_id: string; _user_id: string }
+        Returns: undefined
       }
     }
     Enums: {

@@ -3,6 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { GlassCard } from "@/components/GlassCard";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
 import { useDashboardInsights } from "@/hooks/useDashboardInsights";
+import { MandatoryAnnouncementsBanner } from "@/components/dashboard/MandatoryAnnouncementsBanner";
 import {
   ListTodo,
   CheckCircle2,
@@ -57,6 +58,9 @@ export default function DashboardHome() {
       animate="visible"
       className="space-y-6"
     >
+      {/* Mandatory Announcements - Critical Tasks */}
+      <MandatoryAnnouncementsBanner />
+
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => {
