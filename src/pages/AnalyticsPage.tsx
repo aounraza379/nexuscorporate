@@ -55,14 +55,21 @@ export default function AnalyticsPage() {
     { name: "Rejected", value: leaveRequests?.filter(l => l.status === "rejected").length || 0 },
   ];
 
-  // Weekly productivity mock data
-  const weeklyData = [
-    { day: "Mon", tasks: 4, completed: 3 },
-    { day: "Tue", tasks: 6, completed: 5 },
-    { day: "Wed", tasks: 3, completed: 3 },
-    { day: "Thu", tasks: 8, completed: 6 },
-    { day: "Fri", tasks: 5, completed: 4 },
-  ];
+  // Weekly productivity from real task data (group by day of week)
+  const weeklyData = (() => {
+    const days = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+    return days.map((day, i) => {
+      const dayTasks = tasks?.filter(t => {
+        const d = new Date(t.created_at || "");
+        return d.getDay() === i + 1; // 1=Mon, 5=Fri
+      }) || [];
+      return {
+        day,
+        tasks: dayTasks.length,
+        completed: dayTasks.filter(t => t.status === "completed").length,
+      };
+    });
+  })();
 
   const containerVariants = {
     hidden: { opacity: 0 },

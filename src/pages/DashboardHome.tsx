@@ -1,6 +1,8 @@
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { GlassCard } from "@/components/GlassCard";
+import { useDashboardStats } from "@/hooks/useDashboardStats";
+import { useDashboardInsights } from "@/hooks/useDashboardInsights";
 import {
   ListTodo,
   CheckCircle2,
@@ -11,53 +13,35 @@ import {
   Sparkles,
   ArrowUpRight,
   Heart,
+  Megaphone,
+  CalendarCheck,
+  Loader2,
+  Zap,
 } from "lucide-react";
 
-// Mock data for dashboard
-const employeeStats = [
-  { label: "Pending Tasks", value: 5, icon: ListTodo, trend: "+2 this week" },
-  { label: "Completed", value: 12, icon: CheckCircle2, trend: "85% rate" },
-  { label: "Wellness Score", value: 78, icon: Heart, trend: "+5 vs last week" },
-  { label: "Hours Logged", value: 42, icon: Clock, trend: "On track" },
-];
-
-const managerStats = [
-  { label: "Team Tasks", value: 23, icon: ListTodo, trend: "4 overdue" },
-  { label: "Team Size", value: 8, icon: Users, trend: "1 on leave" },
-  { label: "Burnout Risk", value: 2, icon: AlertTriangle, trend: "Needs attention" },
-  { label: "Productivity", value: "94%", icon: TrendingUp, trend: "+8% vs target" },
-];
-
-const hrStats = [
-  { label: "Total Employees", value: 142, icon: Users, trend: "+3 this month" },
-  { label: "Open Positions", value: 7, icon: ListTodo, trend: "4 in progress" },
-  { label: "Policy Updates", value: 2, icon: Sparkles, trend: "Pending review" },
-  { label: "Avg Satisfaction", value: "4.2", icon: Heart, trend: "↑ 0.3" },
-];
-
-const recentActivity = [
-  { action: "Task completed", item: "Q4 Report Review", time: "2 hours ago" },
-  { action: "Policy updated", item: "Remote Work Guidelines", time: "5 hours ago" },
-  { action: "New announcement", item: "Holiday Schedule 2024", time: "1 day ago" },
-  { action: "Task assigned", item: "Client Presentation", time: "1 day ago" },
-];
+const iconMap: Record<string, any> = {
+  "Pending Tasks": ListTodo,
+  "Completed": CheckCircle2,
+  "Leave Requests": CalendarCheck,
+  "Total Tasks": ListTodo,
+  "Team Tasks": ListTodo,
+  "Team Size": Users,
+  "Pending Approvals": Clock,
+  "Completion Rate": TrendingUp,
+  "Total Employees": Users,
+  "Pending Leaves": Clock,
+  "Active Tasks": ListTodo,
+  "Announcements": Megaphone,
+};
 
 export default function DashboardHome() {
-  const { userRole, profile } = useAuth();
-
-  const stats =
-    userRole === "hr"
-      ? hrStats
-      : userRole === "manager"
-      ? managerStats
-      : employeeStats;
+  const { userRole } = useAuth();
+  const { stats, recentActivity, pendingLeaves, highPriorityTasks } = useDashboardStats();
+  const { insights, prioritizedTasks, isLoading: insightsLoading, refetch } = useDashboardInsights();
 
   const containerVariants = {
     hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: { staggerChildren: 0.1 },
-    },
+    visible: { opacity: 1, transition: { staggerChildren: 0.1 } },
   };
 
   const itemVariants = {
@@ -74,66 +58,86 @@ export default function DashboardHome() {
     >
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat, index) => (
-          <motion.div key={stat.label} variants={itemVariants}>
-            <GlassCard hover className="h-full">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">{stat.label}</p>
-                  <p className="text-3xl font-bold mt-1 text-nexus-gradient">
-                    {stat.value}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">{stat.trend}</p>
+        {stats.map((stat) => {
+          const Icon = iconMap[stat.label] || ListTodo;
+          return (
+            <motion.div key={stat.label} variants={itemVariants}>
+              <GlassCard hover className="h-full">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">{stat.label}</p>
+                    <p className="text-3xl font-bold mt-1 text-nexus-gradient">
+                      {stat.value}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">{stat.trend}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-primary/10">
+                    <Icon className="w-5 h-5 text-primary" />
+                  </div>
                 </div>
-                <div className="p-3 rounded-lg bg-primary/10">
-                  <stat.icon className="w-5 h-5 text-primary" />
-                </div>
-              </div>
-            </GlassCard>
-          </motion.div>
-        ))}
+              </GlassCard>
+            </motion.div>
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Quick Actions */}
+        {/* AI Smart Insights */}
         <motion.div variants={itemVariants} className="lg:col-span-2">
-          <GlassCard>
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-primary" />
-              Quick Actions
-            </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {userRole === "employee" && (
-                <>
-                  <QuickActionButton label="View Tasks" />
-                  <QuickActionButton label="Check Salary" />
-                  <QuickActionButton label="Wellness Check" />
-                  <QuickActionButton label="Request Leave" />
-                  <QuickActionButton label="View Policies" />
-                  <QuickActionButton label="Ask Nexus AI" highlight />
-                </>
-              )}
-              {userRole === "manager" && (
-                <>
-                  <QuickActionButton label="Team Overview" />
-                  <QuickActionButton label="Approve Tasks" />
-                  <QuickActionButton label="Burnout Alerts" highlight />
-                  <QuickActionButton label="Create Task" />
-                  <QuickActionButton label="Announcement" />
-                  <QuickActionButton label="Analytics" />
-                </>
-              )}
-              {userRole === "hr" && (
-                <>
-                  <QuickActionButton label="Employee List" />
-                  <QuickActionButton label="Edit Policies" />
-                  <QuickActionButton label="Payroll" />
-                  <QuickActionButton label="Train AI" highlight />
-                  <QuickActionButton label="Analytics" />
-                  <QuickActionButton label="Announcements" />
-                </>
-              )}
+          <GlassCard glow>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-primary" />
+                Smart Insights
+              </h3>
+              <button
+                onClick={() => refetch()}
+                className="text-xs px-2 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+              >
+                Refresh
+              </button>
             </div>
+            {insightsLoading ? (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="text-sm">Generating insights...</span>
+              </div>
+            ) : insights ? (
+              <div className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">
+                {insights}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Click refresh to generate AI-powered insights based on your data.
+              </p>
+            )}
+
+            {/* Auto-prioritized tasks */}
+            {prioritizedTasks && prioritizedTasks.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-border/50">
+                <h4 className="text-sm font-medium flex items-center gap-1.5 mb-3">
+                  <Zap className="w-4 h-4 text-primary" />
+                  Auto-Prioritized Tasks
+                </h4>
+                <div className="space-y-2">
+                  {prioritizedTasks.map((task: any, i: number) => (
+                    <div key={task.id} className="flex items-center gap-3 text-sm p-2 rounded-lg bg-secondary/30">
+                      <span className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
+                        {i + 1}
+                      </span>
+                      <span className="flex-1 truncate">{task.title}</span>
+                      <span className={`text-xs px-1.5 py-0.5 rounded ${
+                        task.reason === "Overdue" ? "bg-destructive/20 text-destructive" :
+                        task.reason === "High priority" ? "bg-nexus-warning/20 text-nexus-warning" :
+                        "bg-primary/20 text-primary"
+                      }`}>
+                        {task.reason}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </GlassCard>
         </motion.div>
 
@@ -142,7 +146,7 @@ export default function DashboardHome() {
           <GlassCard className="h-full">
             <h3 className="text-lg font-semibold mb-4">Recent Activity</h3>
             <div className="space-y-4">
-              {recentActivity.map((activity, index) => (
+              {recentActivity.length > 0 ? recentActivity.map((activity, index) => (
                 <div
                   key={index}
                   className="flex items-start gap-3 pb-3 border-b border-border/50 last:border-0 last:pb-0"
@@ -155,73 +159,45 @@ export default function DashboardHome() {
                     </p>
                   </div>
                 </div>
-              ))}
+              )) : (
+                <p className="text-sm text-muted-foreground">No recent activity</p>
+              )}
             </div>
           </GlassCard>
         </motion.div>
       </div>
 
-      {/* Role-specific widgets */}
-      {userRole === "manager" && (
+      {/* Manager burnout alert - only show if there are high priority concerns */}
+      {userRole === "manager" && (pendingLeaves > 0 || highPriorityTasks > 2) && (
         <motion.div variants={itemVariants}>
           <GlassCard glow>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-nexus-warning" />
-                Burnout Risk Alert
+                Attention Required
               </h3>
-              <span className="px-2 py-1 bg-nexus-warning/20 text-nexus-warning text-xs rounded-full">
-                2 Team Members
-              </span>
             </div>
-            <p className="text-sm text-muted-foreground mb-4">
-              AI sentiment analysis detected potential burnout indicators. Consider
-              scheduling 1-on-1 meetings this week.
-            </p>
-            <div className="flex gap-2">
-              <div className="flex-1 p-3 rounded-lg bg-secondary/50">
-                <p className="text-sm font-medium">Alex Johnson</p>
-                <p className="text-xs text-muted-foreground">
-                  Working late 5 days • Low engagement score
-                </p>
-              </div>
-              <div className="flex-1 p-3 rounded-lg bg-secondary/50">
-                <p className="text-sm font-medium">Sarah Chen</p>
-                <p className="text-xs text-muted-foreground">
-                  Overdue tasks • Wellness score drop
-                </p>
-              </div>
+            <div className="flex gap-2 flex-wrap">
+              {pendingLeaves > 0 && (
+                <div className="flex-1 min-w-[200px] p-3 rounded-lg bg-secondary/50">
+                  <p className="text-sm font-medium">{pendingLeaves} Pending Leave(s)</p>
+                  <p className="text-xs text-muted-foreground">
+                    Awaiting your review and approval
+                  </p>
+                </div>
+              )}
+              {highPriorityTasks > 2 && (
+                <div className="flex-1 min-w-[200px] p-3 rounded-lg bg-secondary/50">
+                  <p className="text-sm font-medium">{highPriorityTasks} High Priority Tasks</p>
+                  <p className="text-xs text-muted-foreground">
+                    Consider redistributing workload
+                  </p>
+                </div>
+              )}
             </div>
           </GlassCard>
         </motion.div>
       )}
     </motion.div>
-  );
-}
-
-function QuickActionButton({
-  label,
-  highlight = false,
-}: {
-  label: string;
-  highlight?: boolean;
-}) {
-  return (
-    <motion.button
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
-      className={`p-4 rounded-lg text-sm font-medium text-left transition-all flex items-center justify-between group ${
-        highlight
-          ? "bg-gradient-to-r from-primary/20 to-accent/20 border border-primary/30 hover:border-primary/50"
-          : "bg-secondary/50 hover:bg-secondary border border-transparent"
-      }`}
-    >
-      <span>{label}</span>
-      <ArrowUpRight
-        className={`w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity ${
-          highlight ? "text-primary" : ""
-        }`}
-      />
-    </motion.button>
   );
 }

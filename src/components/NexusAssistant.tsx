@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNexusChat } from "@/hooks/useNexusChat";
 import { useAgentToolbox } from "@/hooks/useAgentToolbox";
 import { useLeaveRequests } from "@/hooks/useLeaveRequests";
+import { useVoiceCommands } from "@/hooks/useVoiceCommands";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -24,6 +25,8 @@ import {
   Zap,
   Navigation,
   Activity,
+  Mic,
+  MicOff,
 } from "lucide-react";
 
 interface NexusAssistantProps {
@@ -77,6 +80,19 @@ export function NexusAssistant({ isOpen, onClose }: NexusAssistantProps) {
     currentRoute 
   } = useAgentToolbox();
   const { leaveRequests } = useLeaveRequests();
+
+  // Voice commands
+  const handleVoiceCommand = useCallback((transcript: string) => {
+    setInput(transcript);
+    // Auto-send voice commands
+    sendMessage(transcript);
+  }, [sendMessage]);
+
+  const { isListening, transcript, isSupported, toggleListening, commandHints } = useVoiceCommands({
+    onCommand: handleVoiceCommand,
+    enabled: isOpen,
+  });
+
   const [input, setInput] = useState("");
   const [processingAction, setProcessingAction] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -396,6 +412,25 @@ export function NexusAssistant({ isOpen, onClose }: NexusAssistantProps) {
             </div>
           </ScrollArea>
 
+          {/* Voice listening indicator */}
+          {isListening && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="px-3 pb-1"
+            >
+              <div className="flex items-center gap-2 text-xs text-primary">
+                <motion.div
+                  animate={{ scale: [1, 1.3, 1] }}
+                  transition={{ duration: 1, repeat: Infinity }}
+                  className="w-2 h-2 rounded-full bg-primary"
+                />
+                <span>{transcript || "Listening..."}</span>
+              </div>
+            </motion.div>
+          )}
+
           {/* Input */}
           <div className="p-3 border-t border-border">
             <div className="flex gap-2">
@@ -403,10 +438,25 @@ export function NexusAssistant({ isOpen, onClose }: NexusAssistantProps) {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-                placeholder="Ask or command Nexus..."
+                placeholder={isListening ? "Listening..." : "Ask or command Nexus..."}
                 className="flex-1 h-9 text-sm"
-                disabled={isLoading}
+                disabled={isLoading || isListening}
               />
+              {isSupported && (
+                <Button
+                  onClick={toggleListening}
+                  variant={isListening ? "destructive" : "secondary"}
+                  size="icon"
+                  className="h-9 w-9"
+                  disabled={isLoading}
+                >
+                  {isListening ? (
+                    <MicOff className="w-4 h-4" />
+                  ) : (
+                    <Mic className="w-4 h-4" />
+                  )}
+                </Button>
+              )}
               <Button
                 onClick={handleSend}
                 disabled={!input.trim() || isLoading}
