@@ -45,3 +45,9 @@ This project is built with:
 - React
 - shadcn-ui
 - Tailwind CSS
+
+## Test Credentials
+
+- employee@test.com / password123
+- manager@test.com / password123
+- hr@test.com / password123
