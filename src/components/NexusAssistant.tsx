@@ -83,8 +83,7 @@ export function NexusAssistant({ isOpen, onClose }: NexusAssistantProps) {
 
   // Voice commands
   const handleVoiceCommand = useCallback((transcript: string) => {
-    setInput(transcript);
-    // Auto-send voice commands
+    // Send command directly, don't set input — keeps field clean for next command
     sendMessage(transcript);
   }, [sendMessage]);
 
