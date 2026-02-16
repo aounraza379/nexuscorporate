@@ -11,6 +11,8 @@ export interface Announcement {
   created_by: string | null;
   created_at: string | null;
   expires_at: string | null;
+  is_mandatory: boolean;
+  read_by: string[];
 }
 
 export function useAnnouncements() {
@@ -52,9 +54,28 @@ export function useAnnouncements() {
     };
   }, [user, queryClient]);
 
+  const markAsRead = async (announcementId: string) => {
+    if (!user) return;
+    const { error } = await supabase.rpc("mark_announcement_read", {
+      _announcement_id: announcementId,
+      _user_id: user.id,
+    });
+    if (error) {
+      console.error("Error marking announcement read:", error);
+    } else {
+      queryClient.invalidateQueries({ queryKey: ["announcements"] });
+    }
+  };
+
+  const unreadMandatory = (announcements || []).filter(
+    (a) => a.is_mandatory && !a.read_by?.includes(user?.id || "")
+  );
+
   return {
     announcements: announcements || [],
+    unreadMandatory,
     isLoading,
     error,
+    markAsRead,
   };
 }
