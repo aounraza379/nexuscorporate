@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { GlassCard } from "@/components/GlassCard";
+import { exportToCsv } from "@/lib/exportCsv";
 import {
   Wallet,
   Download,
@@ -132,7 +133,18 @@ export default function SalaryPage() {
                 <FileText className="w-5 h-5 text-primary" />
                 Current Payslip - February 2026
               </h3>
-              <Button variant="outline" size="sm" className="gap-2">
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => {
+                exportToCsv("payslip-february-2026", [{
+                  "Basic Salary": currentPayslip.basicSalary,
+                  Allowances: currentPayslip.allowances,
+                  Overtime: currentPayslip.overtime,
+                  "Gross Salary": currentPayslip.grossSalary,
+                  Tax: currentPayslip.tax,
+                  Insurance: currentPayslip.insurance,
+                  "Total Deductions": currentPayslip.deductions,
+                  "Net Salary": currentPayslip.netSalary,
+                }]);
+              }}>
                 <Download className="w-4 h-4" />
                 Download
               </Button>

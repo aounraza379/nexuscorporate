@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import { exportToCsv } from "@/lib/exportCsv";
 import {
   Users,
   Search,
@@ -107,7 +108,15 @@ export default function EmployeesPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="gap-2">
+          <Button variant="outline" className="gap-2" onClick={() => {
+            if (!employees?.length) return;
+            exportToCsv("employees-export", employees.map((e) => ({
+              Name: e.full_name || "",
+              Department: e.department || "",
+              Role: getRoleForUser(e.id),
+              "Joined": e.created_at ? new Date(e.created_at).toLocaleDateString() : "",
+            })));
+          }}>
             <Download className="w-4 h-4" />
             Export
           </Button>
