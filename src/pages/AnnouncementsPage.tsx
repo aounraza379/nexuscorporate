@@ -83,7 +83,7 @@ export default function AnnouncementsPage() {
   const getPriorityIcon = (priority: string | null) => {
     switch (priority) {
       case "urgent": return <AlertCircle className="w-4 h-4 text-destructive" />;
-      case "important": return <Star className="w-4 h-4 text-primary" />;
+      case "high": return <Star className="w-4 h-4 text-primary" />;
       default: return <Info className="w-4 h-4 text-muted-foreground" />;
     }
   };
@@ -91,7 +91,7 @@ export default function AnnouncementsPage() {
   const getPriorityBadge = (priority: string | null) => {
     switch (priority) {
       case "urgent": return "bg-destructive/10 text-destructive border-destructive/20";
-      case "important": return "bg-primary/10 text-primary border-primary/20";
+      case "high": return "bg-primary/10 text-primary border-primary/20";
       default: return "bg-muted text-muted-foreground border-border";
     }
   };
@@ -125,8 +125,9 @@ export default function AnnouncementsPage() {
                   onValueChange={(value) => setNewAnnouncement({ ...newAnnouncement, priority: value })}>
                   <SelectTrigger><SelectValue placeholder="Select priority" /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
                     <SelectItem value="normal">Normal</SelectItem>
-                    <SelectItem value="important">Important</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
                     <SelectItem value="urgent">Urgent</SelectItem>
                   </SelectContent>
                 </Select>
@@ -180,7 +181,7 @@ export default function AnnouncementsPage() {
               <motion.div key={announcement.id} variants={itemVariants}>
                 <GlassCard className={`border-l-4 ${
                   announcement.priority === "urgent" ? "border-l-destructive"
-                    : announcement.priority === "important" ? "border-l-primary" : "border-l-muted"
+                    : announcement.priority === "high" ? "border-l-primary" : "border-l-muted"
                 }`}>
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
