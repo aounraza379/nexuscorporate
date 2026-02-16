@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLeaveRequests } from "@/hooks/useLeaveRequests";
+import { useLeaveImpact } from "@/hooks/useLeaveImpact";
 import { GlassCard } from "@/components/GlassCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { LeaveCapacityWarning } from "@/components/leave/LeaveCapacityWarning";
+import { LeaveImpactBadge } from "@/components/leave/LeaveImpactBadge";
 import {
   Plus,
   Calendar,
@@ -33,8 +36,9 @@ const statusConfig = {
 };
 
 export default function LeavePage() {
-  const { userRole, user } = useAuth();
+  const { userRole, user, profile } = useAuth();
   const { leaveRequests, isLoading, createLeaveRequest, updateLeaveRequest } = useLeaveRequests();
+  const { impact, isAnalyzing, analyzeImpact, clearImpact } = useLeaveImpact();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newRequest, setNewRequest] = useState({
     leave_type: "annual",
@@ -43,10 +47,24 @@ export default function LeavePage() {
     reason: "",
   });
 
+  // Analyze impact when dates change in creation form
+  useEffect(() => {
+    if (newRequest.start_date && newRequest.end_date && profile?.department) {
+      analyzeImpact({
+        start_date: newRequest.start_date,
+        end_date: newRequest.end_date,
+        department: profile.department,
+      });
+    } else {
+      clearImpact();
+    }
+  }, [newRequest.start_date, newRequest.end_date, profile?.department]);
+
   const handleSubmit = async () => {
     if (!newRequest.start_date || !newRequest.end_date) return;
     await createLeaveRequest.mutateAsync(newRequest);
     setNewRequest({ leave_type: "annual", start_date: "", end_date: "", reason: "" });
+    clearImpact();
     setIsCreateOpen(false);
   };
 
@@ -54,7 +72,6 @@ export default function LeavePage() {
     await updateLeaveRequest.mutateAsync({ id, status });
   };
 
-  // Filter requests based on role
   const displayedRequests = userRole === "employee"
     ? leaveRequests.filter((r) => r.user_id === user?.id)
     : leaveRequests;
@@ -85,9 +102,9 @@ export default function LeavePage() {
             {displayedRequests.length} total requests • {pendingCount} pending
           </p>
         </div>
-        
+
         {userRole === "employee" && (
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <Dialog open={isCreateOpen} onOpenChange={(open) => { setIsCreateOpen(open); if (!open) clearImpact(); }}>
             <DialogTrigger asChild>
               <Button variant="glow" className="gap-2">
                 <Plus className="w-4 h-4" />
@@ -132,6 +149,15 @@ export default function LeavePage() {
                     />
                   </div>
                 </div>
+
+                {/* Capacity Warning */}
+                {isAnalyzing && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Analyzing department capacity…
+                  </div>
+                )}
+                {impact && !isAnalyzing && <LeaveCapacityWarning impact={impact} />}
+
                 <Textarea
                   placeholder="Reason (optional)"
                   value={newRequest.reason}
@@ -170,6 +196,7 @@ export default function LeavePage() {
           displayedRequests.map((request) => {
             const statusInfo = statusConfig[request.status as keyof typeof statusConfig] || statusConfig.pending;
             const StatusIcon = statusInfo.icon;
+            const isManagerView = (userRole === "manager" || userRole === "hr");
 
             return (
               <motion.div
@@ -181,7 +208,7 @@ export default function LeavePage() {
                 <GlassCard className="p-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 space-y-2">
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <Badge className={statusInfo.color}>
                           <StatusIcon className="w-3 h-3 mr-1" />
                           {request.status}
@@ -189,26 +216,35 @@ export default function LeavePage() {
                         <Badge variant="outline">
                           {leaveTypes.find((t) => t.value === request.leave_type)?.label || request.leave_type}
                         </Badge>
+                        {/* Impact Analysis Badge for managers on pending requests */}
+                        {isManagerView && request.status === "pending" && profile?.department && (
+                          <LeaveImpactBadge
+                            requestId={request.id}
+                            startDate={request.start_date}
+                            endDate={request.end_date}
+                            department={profile.department}
+                          />
+                        )}
                       </div>
-                      
+
                       <div className="flex items-center gap-2 text-sm">
                         <Calendar className="w-4 h-4 text-muted-foreground" />
                         <span>
                           {new Date(request.start_date).toLocaleDateString()} - {new Date(request.end_date).toLocaleDateString()}
                         </span>
                       </div>
-                      
+
                       {request.reason && (
                         <p className="text-sm text-muted-foreground">{request.reason}</p>
                       )}
-                      
+
                       <p className="text-xs text-muted-foreground">
                         Submitted: {new Date(request.created_at).toLocaleDateString()}
                       </p>
                     </div>
-                    
+
                     {/* Manager/HR Actions */}
-                    {(userRole === "manager" || userRole === "hr") && request.status === "pending" && (
+                    {isManagerView && request.status === "pending" && (
                       <div className="flex gap-2">
                         <Button
                           variant="secondary"
