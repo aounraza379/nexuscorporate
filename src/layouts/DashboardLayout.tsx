@@ -32,6 +32,7 @@ import {
   CalendarCheck,
   Menu,
   X,
+  ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -41,6 +42,7 @@ const navItems = {
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
     { icon: ListTodo, label: "My Tasks", path: "/dashboard/tasks" },
     { icon: CalendarCheck, label: "Leave", path: "/dashboard/leave" },
+    { icon: ShieldCheck, label: "Benefits", path: "/dashboard/benefits" },
     { icon: Wallet, label: "Salary", path: "/dashboard/salary" },
     { icon: FileText, label: "Policies", path: "/dashboard/policies" },
     { icon: Megaphone, label: "Announcements", path: "/dashboard/announcements" },
