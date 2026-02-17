@@ -77,6 +77,48 @@ export type Database = {
         }
         Relationships: []
       }
+      claims_history: {
+        Row: {
+          amount: number
+          category: string
+          claim_date: string
+          claim_reference: string | null
+          created_at: string
+          description: string
+          id: string
+          provider: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount?: number
+          category: string
+          claim_date?: string
+          claim_reference?: string | null
+          created_at?: string
+          description: string
+          id?: string
+          provider?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          claim_date?: string
+          claim_reference?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          provider?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       company_policies: {
         Row: {
           category: string | null
