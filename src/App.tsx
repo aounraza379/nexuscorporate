@@ -24,6 +24,7 @@ import TeamPage from "./pages/TeamPage";
 import EmployeesPage from "./pages/EmployeesPage";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
+import ArchitectureSpecPage from "./pages/ArchitectureSpecPage";
 
 const queryClient = new QueryClient();
 
@@ -41,6 +42,7 @@ function AppRoutes() {
       {/* Public routes */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/auth" element={<AuthRedirect />} />
+      <Route path="/architecture-spec" element={<ArchitectureSpecPage />} />
       
       {/* Protected dashboard routes */}
       <Route
