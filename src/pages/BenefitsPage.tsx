@@ -280,11 +280,9 @@ export default function BenefitsPage() {
               <div className="overflow-x-auto -mx-4 sm:mx-0">
                 <Table>
                   <TableHeader>
-                    <TableRow>
+                     <TableRow>
                       <TableHead>Date</TableHead>
                       <TableHead>Category</TableHead>
-                      <TableHead className="hidden sm:table-cell">Description</TableHead>
-                      <TableHead className="hidden md:table-cell">Provider</TableHead>
                       <TableHead>Amount</TableHead>
                       <TableHead>Status</TableHead>
                     </TableRow>
@@ -299,12 +297,6 @@ export default function BenefitsPage() {
                           <Badge variant="outline" className="capitalize text-xs">
                             {claim.category}
                           </Badge>
-                        </TableCell>
-                        <TableCell className="hidden sm:table-cell max-w-[200px] truncate text-muted-foreground text-xs">
-                          {claim.description}
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
-                          {claim.provider || "—"}
                         </TableCell>
                         <TableCell className="font-mono-data text-xs">
                           ₹{claim.amount.toLocaleString()}
@@ -326,16 +318,21 @@ export default function BenefitsPage() {
             )}
           </GlassCard>
 
-          {/* Tip */}
-          {claims.length > 0 && (
-            <div className="flex items-start gap-2 p-3 mt-4 rounded-lg bg-primary/5 border border-primary/10">
-              <AlertCircle className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+          {/* Layered Disclosure — direct to AI for sensitive deep-dive */}
+          <div className="flex items-start gap-3 p-4 mt-4 rounded-lg bg-primary/5 border border-primary/10">
+            <AlertCircle className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-foreground">
+                Need details on a specific claim?
+              </p>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Ask <span className="text-primary font-medium">Nexus Agent</span> for
-                a detailed breakdown — e.g. "Where did I spend my insurance limit?"
+                For privacy, detailed descriptions and provider info are available through
+                the <span className="text-primary font-medium">Nexus Agent</span>. Try asking:
+                <span className="italic"> "Why was my claim on Jan 15 denied?"</span> or
+                <span className="italic"> "Show my dental claims this year."</span>
               </p>
             </div>
-          )}
+          </div>
         </TabsContent>
       </Tabs>
     </motion.div>
