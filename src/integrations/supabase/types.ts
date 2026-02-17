@@ -246,7 +246,9 @@ export type Database = {
           employment_status: string
           full_name: string | null
           id: string
+          is_online: boolean
           join_date: string | null
+          last_seen: string | null
           reporting_manager: string | null
           salary_info: Json | null
           updated_at: string | null
@@ -260,7 +262,9 @@ export type Database = {
           employment_status?: string
           full_name?: string | null
           id: string
+          is_online?: boolean
           join_date?: string | null
+          last_seen?: string | null
           reporting_manager?: string | null
           salary_info?: Json | null
           updated_at?: string | null
@@ -274,7 +278,9 @@ export type Database = {
           employment_status?: string
           full_name?: string | null
           id?: string
+          is_online?: boolean
           join_date?: string | null
+          last_seen?: string | null
           reporting_manager?: string | null
           salary_info?: Json | null
           updated_at?: string | null

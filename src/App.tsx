@@ -18,7 +18,7 @@ import PoliciesPage from "./pages/PoliciesPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import AnnouncementsPage from "./pages/AnnouncementsPage";
 import SalaryPage from "./pages/SalaryPage";
-import WellnessPage from "./pages/WellnessPage";
+// Wellness removed — deemed unprofessional for corporate dashboard
 import PayrollPage from "./pages/PayrollPage";
 import TeamPage from "./pages/TeamPage";
 import EmployeesPage from "./pages/EmployeesPage";
@@ -59,7 +59,7 @@ function AppRoutes() {
         <Route path="employees" element={<EmployeesPage />} />
         <Route path="salary" element={<SalaryPage />} />
         <Route path="payroll" element={<PayrollPage />} />
-        <Route path="wellness" element={<WellnessPage />} />
+        {/* Wellness route removed */}
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="announcements" element={<AnnouncementsPage />} />
         <Route path="settings" element={<SettingsPage />} />
